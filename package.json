@@ -1,0 +1,13 @@
+{
+  "name": "token-optimization",
+  "private": true,
+  "description": "TokenOpt — sufficiency-gated context compiler (Rust core + polyglot clients)",
+  "scripts": {
+    "build:ts": "npm run build -w @tokenopt/client",
+    "typecheck:ts": "npm run typecheck -w @tokenopt/client"
+  },
+  "workspaces": [
+    "bindings/typescript"
+  ],
+  "license": "MIT"
+}

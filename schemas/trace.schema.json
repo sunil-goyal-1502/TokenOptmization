@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenopt.dev/schemas/trace.schema.json",
+  "title": "AgentTrace",
+  "type": "object",
+  "required": ["messages"],
+  "properties": {
+    "trace_id": { "type": "string" },
+    "session_id": { "type": "string" },
+    "messages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TranscriptMessage" }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "orchestrator": { "type": "string" },
+        "model": { "type": "string" },
+        "task_id": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "TranscriptMessage": {
+      "type": "object",
+      "required": ["role"],
+      "properties": {
+        "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
+        "content": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array" }
+          ]
+        },
+        "name": { "type": "string" },
+        "tool_calls": { "type": "array" },
+        "tool_call_id": { "type": "string" }
+      }
+    }
+  }
+}

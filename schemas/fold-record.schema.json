@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenopt.dev/schemas/fold-record.schema.json",
+  "title": "FoldRecord",
+  "type": "object",
+  "required": ["subgoal", "status"],
+  "properties": {
+    "subgoal": { "type": "string" },
+    "status": { "enum": ["success", "partial", "failed"] },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "path"],
+        "properties": {
+          "type": { "type": "string" },
+          "path": { "type": "string" },
+          "hash": { "type": "string" }
+        }
+      }
+    },
+    "preconditions_preserved": { "type": "array", "items": { "type": "string" } },
+    "decisions": { "type": "array", "items": { "type": "string" } },
+    "open_issues": { "type": "array", "items": { "type": "string" } },
+    "token_budget_used": { "type": "integer", "minimum": 0 }
+  }
+}
