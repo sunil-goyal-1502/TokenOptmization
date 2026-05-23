@@ -14,6 +14,7 @@ pub mod fold;
 pub mod ir;
 pub mod middleware;
 pub mod oracle;
+pub mod simulate;
 pub mod store;
 pub mod tokens;
 pub mod trace;
@@ -37,5 +38,8 @@ pub use oracle::{
 };
 pub use store::{ColdStore, FileColdStore, MemoryColdStore, StoreRef};
 pub use tokens::{estimate_blocks_tokens, estimate_tokens};
+pub use simulate::{
+    generate_agent_trace, simulate_agent_loop, AgentLoopReport, AgentLoopSimConfig, TurnMetrics,
+};
 pub use trace::{AgentTrace, TraceMetadata};
 pub use transform::{Transform, TransformContext, TransformPipeline, TransformPipelineBuilder};

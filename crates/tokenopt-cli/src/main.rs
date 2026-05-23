@@ -4,7 +4,8 @@ use std::sync::Arc;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tokenopt_core::{
-    analyze_trace, compile_context, AgentTrace, CompileOptions, FileColdStore, MemoryColdStore,
+    analyze_trace, compile_context, simulate_agent_loop, AgentLoopSimConfig, AgentTrace,
+    CompileOptions, FileColdStore, MemoryColdStore,
 };
 use tracing_subscriber::EnvFilter;
 
@@ -46,6 +47,32 @@ enum Commands {
         #[arg(short, long)]
         trace: PathBuf,
     },
+    /// Simulate multi-turn agent loop and measure token savings (no LLM)
+    Bench {
+        #[command(subcommand)]
+        bench: BenchCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum BenchCommands {
+    /// Run synthetic agent loop; compiles context before each turn
+    AgentLoop {
+        #[arg(long, default_value = "20")]
+        turns: u32,
+        #[arg(long, default_value = "8000")]
+        payload_bytes: usize,
+        #[arg(long, default_value = "2")]
+        keep_recent: usize,
+        #[arg(long, default_value = "128000")]
+        budget: u64,
+        #[arg(long)]
+        no_masking: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        write_trace: Option<PathBuf>,
+    },
 }
 
 #[tokio::main]
@@ -78,6 +105,28 @@ async fn main() -> anyhow::Result<()> {
             .await
         }
         Commands::Validate { trace } => cmd_validate(trace).await,
+        Commands::Bench { bench } => match bench {
+            BenchCommands::AgentLoop {
+                turns,
+                payload_bytes,
+                keep_recent,
+                budget,
+                no_masking,
+                json,
+                write_trace,
+            } => {
+                cmd_bench_agent_loop(
+                    turns,
+                    payload_bytes,
+                    keep_recent,
+                    budget,
+                    no_masking,
+                    json,
+                    write_trace,
+                )
+                .await
+            }
+        },
     }
 }
 
@@ -146,6 +195,82 @@ async fn cmd_compile(
     eprintln!(
         "saved {} tokens ({:.1}%)",
         result.stats.tokens_saved, result.stats.reduction_percent
+    );
+    Ok(())
+}
+
+async fn cmd_bench_agent_loop(
+    turns: u32,
+    payload_bytes: usize,
+    keep_recent: usize,
+    budget: u64,
+    no_masking: bool,
+    json: bool,
+    write_trace: Option<PathBuf>,
+) -> anyhow::Result<()> {
+    let config = AgentLoopSimConfig {
+        turns,
+        tool_payload_bytes: payload_bytes,
+        keep_recent_tool_results: keep_recent,
+        token_budget: budget,
+        enable_consumed_masking: !no_masking,
+        run_sufficiency_check: false,
+    };
+
+    if let Some(path) = write_trace {
+        let messages = tokenopt_core::generate_agent_trace(&config);
+        let trace = AgentTrace {
+            trace_id: "bench".into(),
+            session_id: "bench-session".into(),
+            messages,
+            metadata: Some(tokenopt_core::TraceMetadata {
+                orchestrator: Some("ctxc-bench".into()),
+                model: None,
+                task_id: None,
+            }),
+        };
+        tokio::fs::write(&path, serde_json::to_string_pretty(&trace)?).await?;
+        eprintln!("wrote trace {}", path.display());
+    }
+
+    let report = simulate_agent_loop(config).await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+
+    eprintln!("TokenOpt agent-loop benchmark (synthetic, no LLM)");
+    eprintln!("Active optimizations: {}", report.optimizations_active.join(", "));
+    eprintln!();
+    eprintln!(
+        "{:>4} {:>6} {:>12} {:>12} {:>10} {:>8}",
+        "turn", "msgs", "baseline", "compiled", "saved", "reduct%"
+    );
+    for t in &report.turns {
+        if t.turn % 5 == 0 || t.turn == report.turns.len() as u32 {
+            eprintln!(
+                "{:>4} {:>6} {:>12} {:>12} {:>10} {:>7.1}%",
+                t.turn,
+                t.message_count,
+                t.baseline_tokens,
+                t.compiled_tokens,
+                t.tokens_saved,
+                t.reduction_percent
+            );
+        }
+    }
+    eprintln!();
+    eprintln!("FINAL turn {}:", report.turns.last().map(|t| t.turn).unwrap_or(0));
+    eprintln!("  baseline tokens:  {}", report.final_baseline_tokens);
+    eprintln!("  compiled tokens:  {}", report.final_compiled_tokens);
+    eprintln!(
+        "  reduction:        {:.1}%",
+        report.final_reduction_percent
+    );
+    eprintln!(
+        "  cumulative saved: {} tokens (sum per-turn deltas)",
+        report.total_tokens_saved_across_turns
     );
     Ok(())
 }

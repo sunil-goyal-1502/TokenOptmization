@@ -13,6 +13,18 @@ Production-ready **sufficiency-gated context compiler** for LLM agents. Reduces 
 
 Rust gives a single correct implementation with predictable latency; Python and TypeScript cover LangGraph, CrewAI, Cursor hooks, and Node orchestrators without duplicating compiler logic.
 
+## Testing token optimization
+
+See **[docs/TESTING.md](docs/TESTING.md)** for the full guide.
+
+**Quick proof (synthetic agent loop, no API keys):**
+
+```bash
+cargo run -p tokenopt-cli -- bench agent-loop --turns 25 --payload-bytes 12000
+```
+
+You should see **30–70% reduction** on the final turn when old tool outputs are masked.
+
 ## Quick start
 
 ```bash
