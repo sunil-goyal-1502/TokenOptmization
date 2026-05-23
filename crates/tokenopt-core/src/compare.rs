@@ -97,7 +97,8 @@ pub async fn bench_compile_latency(
         opts.session_id = format!("{}-bench-{i}", opts.session_id);
         let start = std::time::Instant::now();
         let _ = compile_context(messages, opts, store.clone(), None).await?;
-        durations.push(start.elapsed().as_millis() as u64);
+        let micros = start.elapsed().as_micros();
+        durations.push(if micros == 0 { 0 } else { (micros / 1000).max(1) as u64 });
     }
     durations.sort_unstable();
     let n = durations.len();

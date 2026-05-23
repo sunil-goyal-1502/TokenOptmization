@@ -88,6 +88,15 @@ pub struct CompileResult {
     pub sufficiency_message: Option<String>,
 }
 
+fn duration_ms(d: std::time::Duration) -> u64 {
+    let micros = d.as_micros();
+    if micros == 0 {
+        0
+    } else {
+        ((micros + 999) / 1000).max(1) as u64
+    }
+}
+
 pub async fn compile_context(
     messages: &[TranscriptMessage],
     options: CompileOptions,
@@ -131,7 +140,7 @@ async fn compile_context_inner(
     let blocks_in_len = blocks_in.len();
     let transform_start = std::time::Instant::now();
     let blocks_out = pipeline.run(blocks_in.clone(), &ctx, store.clone()).await?;
-    let transform_ms = transform_start.elapsed().as_millis() as u64;
+    let transform_ms = duration_ms(transform_start.elapsed());
 
     let subgoals = if options.subgoals.is_empty() && options.infer_subgoals {
         infer_subgoals_from_blocks(&blocks_in)
@@ -155,7 +164,7 @@ async fn compile_context_inner(
             message: None,
         }
     };
-    let oracle_ms = oracle_start.elapsed().as_millis() as u64;
+    let oracle_ms = duration_ms(oracle_start.elapsed());
 
     if options.run_sufficiency_check && !sufficiency.sufficient && !options.soft_sufficiency {
         return Err(CompilerError::SufficiencyFailed(
@@ -190,7 +199,7 @@ async fn compile_context_inner(
         .iter()
         .filter(|b| b.metadata.cold_ref.is_some())
         .count();
-    let compile_ms = compile_start.elapsed().as_millis() as u64;
+    let compile_ms = duration_ms(compile_start.elapsed());
 
     Ok(CompileResult {
         blocks: final_blocks,
