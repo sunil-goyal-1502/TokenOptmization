@@ -11,10 +11,62 @@ use crate::oracle::{
     infer_subgoals_from_blocks, CompositeOracle, RuleOracle, Subgoal, SufficiencyOracle,
     SufficiencyResult,
 };
+use crate::fold::FoldRecord;
+use crate::llm::{LlmConfig, LlmSufficiencyOracle};
 use crate::metrics::{record_compile_error, record_compile_success};
+use crate::pipeline::build_pipeline;
+use crate::rehydrate::{extract_refs_from_text, rehydrate_messages, RehydrateOptions};
+use crate::routing::{compute_routing_hint, RoutingHint};
 use crate::store::ColdStore;
 use crate::tokens::{estimate_blocks_tokens, estimate_tokens};
-use crate::transform::{TransformContext, TransformPipelineBuilder};
+use crate::transform::TransformContext;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransformToggles {
+    #[serde(default = "default_true")]
+    pub referential_keep: bool,
+    #[serde(default = "default_true")]
+    pub error_compaction: bool,
+    #[serde(default = "default_true")]
+    pub consumed_result_mask: bool,
+    #[serde(default = "default_true")]
+    pub rolling_window: bool,
+    #[serde(default = "default_true")]
+    pub budget_trim: bool,
+    #[serde(default)]
+    pub guideline_bank: bool,
+    #[serde(default = "default_true")]
+    pub fold_collapse: bool,
+    #[serde(default = "default_true")]
+    pub agent_omit: bool,
+    #[serde(default)]
+    pub memory_prune: bool,
+    #[serde(default = "default_true")]
+    pub summarization: bool,
+    #[serde(default = "default_true")]
+    pub external_compress: bool,
+    #[serde(default = "default_true")]
+    pub cache_packer: bool,
+}
+
+impl Default for TransformToggles {
+    fn default() -> Self {
+        Self {
+            referential_keep: true,
+            error_compaction: true,
+            consumed_result_mask: true,
+            rolling_window: true,
+            budget_trim: true,
+            guideline_bank: false,
+            fold_collapse: true,
+            agent_omit: true,
+            memory_prune: false,
+            summarization: true,
+            external_compress: true,
+            cache_packer: true,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompileOptions {
@@ -38,6 +90,26 @@ pub struct CompileOptions {
     /// Model name for accurate token counting when `accurate-tokens` feature is enabled.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token_count_model: Option<String>,
+    #[serde(default)]
+    pub transforms: TransformToggles,
+    #[serde(default)]
+    pub fold_records: Vec<FoldRecord>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub guideline_bank_path: Option<String>,
+    #[serde(default = "default_rolling_tail")]
+    pub rolling_tail_blocks: usize,
+    #[serde(default = "default_summarize_keep")]
+    pub summarize_keep_recent_blocks: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_compress_url: Option<String>,
+    #[serde(default)]
+    pub llm_oracle: LlmConfig,
+    #[serde(default)]
+    pub auto_rehydrate_refs: bool,
+    #[serde(default = "default_true")]
+    pub routing_hints: bool,
+    #[serde(default)]
+    pub turn_index: u32,
 }
 
 fn default_keep_recent() -> usize {
@@ -48,6 +120,12 @@ fn default_error_turns() -> u32 {
 }
 fn default_true() -> bool {
     true
+}
+fn default_rolling_tail() -> usize {
+    16
+}
+fn default_summarize_keep() -> usize {
+    12
 }
 
 impl Default for CompileOptions {
@@ -63,6 +141,16 @@ impl Default for CompileOptions {
             infer_subgoals: true,
             soft_sufficiency: false,
             token_count_model: None,
+            transforms: TransformToggles::default(),
+            fold_records: vec![],
+            guideline_bank_path: None,
+            rolling_tail_blocks: default_rolling_tail(),
+            summarize_keep_recent_blocks: default_summarize_keep(),
+            external_compress_url: None,
+            llm_oracle: LlmConfig::default(),
+            auto_rehydrate_refs: false,
+            routing_hints: true,
+            turn_index: 0,
         }
     }
 }
@@ -91,6 +179,8 @@ pub struct CompileResult {
     pub sufficient: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sufficiency_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing_hint: Option<RoutingHint>,
 }
 
 fn duration_ms(d: std::time::Duration) -> u64 {
@@ -123,9 +213,37 @@ async fn compile_context_inner(
     oracle: Option<Arc<dyn SufficiencyOracle>>,
 ) -> Result<CompileResult> {
     let compile_start = std::time::Instant::now();
-    let blocks_in = parse_transcript(messages)?;
+
+    let mut working_messages = messages.to_vec();
+    if options.auto_rehydrate_refs {
+        let mut refs = Vec::new();
+        for msg in messages {
+            refs.extend(extract_refs_from_text(&crate::ir::extract_text(msg)));
+        }
+        refs.sort();
+        refs.dedup();
+        if !refs.is_empty() {
+            working_messages = rehydrate_messages(
+                &working_messages,
+                store.clone(),
+                RehydrateOptions {
+                    refs,
+                    ..Default::default()
+                },
+            )
+            .await?
+            .messages;
+        }
+    }
+
+    let blocks_in = parse_transcript(&working_messages)?;
     validate_blocks(&blocks_in)?;
     let input_tokens = estimate_blocks_tokens(&blocks_in);
+
+    let mut pipeline_options = options.clone();
+    if !pipeline_options.enable_consumed_masking {
+        pipeline_options.transforms.consumed_result_mask = false;
+    }
 
     let ctx = TransformContext {
         session_id: options.session_id.clone(),
@@ -133,10 +251,10 @@ async fn compile_context_inner(
         keep_recent_tool_results: options.keep_recent_tool_results,
         error_compaction_after_turns: options.error_compaction_after_turns,
         enable_consumed_masking: options.enable_consumed_masking,
-        rolling_tail_blocks: 16,
+        rolling_tail_blocks: options.rolling_tail_blocks,
     };
 
-    let pipeline = TransformPipelineBuilder::with_defaults().build();
+    let pipeline = build_pipeline(&pipeline_options);
     let transforms_applied: Vec<String> = pipeline
         .transform_names()
         .into_iter()
@@ -155,9 +273,11 @@ async fn compile_context_inner(
     };
 
     let oracle_impl: Arc<dyn SufficiencyOracle> = oracle.unwrap_or_else(|| {
-        Arc::new(CompositeOracle {
-            oracles: vec![Arc::new(RuleOracle::default())],
-        })
+        let mut oracles: Vec<Arc<dyn SufficiencyOracle>> = vec![Arc::new(RuleOracle::default())];
+        if options.llm_oracle.enabled {
+            oracles.push(Arc::new(LlmSufficiencyOracle::new(options.llm_oracle.clone())));
+        }
+        Arc::new(CompositeOracle { oracles })
     });
 
     let oracle_start = std::time::Instant::now();
@@ -207,6 +327,17 @@ async fn compile_context_inner(
         .count();
     let compile_ms = duration_ms(compile_start.elapsed());
 
+    let routing_hint = if options.routing_hints {
+        Some(compute_routing_hint(
+            final_output_tokens,
+            options.token_budget,
+            &sufficiency,
+            options.turn_index,
+        ))
+    } else {
+        None
+    };
+
     Ok(CompileResult {
         blocks: final_blocks,
         messages: final_messages,
@@ -226,6 +357,7 @@ async fn compile_context_inner(
         },
         sufficient: sufficiency.sufficient,
         sufficiency_message: sufficiency.message,
+        routing_hint,
     })
 }
 

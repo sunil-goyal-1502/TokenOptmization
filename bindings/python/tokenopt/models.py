@@ -19,6 +19,21 @@ class Subgoal(BaseModel):
     required_slots: list[str] = Field(default_factory=list)
 
 
+class TransformToggles(BaseModel):
+    referential_keep: bool = True
+    error_compaction: bool = True
+    consumed_result_mask: bool = True
+    rolling_window: bool = True
+    budget_trim: bool = True
+    guideline_bank: bool = False
+    fold_collapse: bool = True
+    agent_omit: bool = True
+    memory_prune: bool = False
+    summarization: bool = True
+    external_compress: bool = True
+    cache_packer: bool = True
+
+
 class CompileOptions(BaseModel):
     session_id: str = "default"
     token_budget: int = 128_000
@@ -30,6 +45,16 @@ class CompileOptions(BaseModel):
     infer_subgoals: bool = True
     soft_sufficiency: bool = False
     token_count_model: str | None = None
+    transforms: TransformToggles = Field(default_factory=TransformToggles)
+    fold_records: list[FoldRecord] = Field(default_factory=list)
+    guideline_bank_path: str | None = None
+    rolling_tail_blocks: int = 16
+    summarize_keep_recent_blocks: int = 12
+    external_compress_url: str | None = None
+    auto_rehydrate_refs: bool = False
+    routing_hints: bool = True
+    turn_index: int = 0
+    llm_oracle: dict[str, Any] = Field(default_factory=dict)
 
 
 class CompareReport(BaseModel):
@@ -64,12 +89,19 @@ class CompileStats(BaseModel):
     token_count_method: str = "heuristic"
 
 
+class RoutingHint(BaseModel):
+    tier: str
+    reason: str
+    estimated_complexity: int | None = None
+
+
 class CompileResult(BaseModel):
     blocks: list[dict[str, Any]]
     messages: list[TranscriptMessage]
     stats: CompileStats
     sufficient: bool
     sufficiency_message: str | None = None
+    routing_hint: RoutingHint | None = None
 
 
 class AnalyzeReport(BaseModel):

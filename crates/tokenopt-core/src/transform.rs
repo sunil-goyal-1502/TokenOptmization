@@ -7,6 +7,12 @@ use crate::ir::{BlockKind, ContextBlock};
 use crate::store::ColdStore;
 use crate::tokens::estimate_tokens;
 
+pub use crate::extended_transforms::{
+    AgentOmitTransform, CachePackTransform, ExternalCompressTransform, FoldCollapseTransform,
+    FoldInjectTransform, MemoryPruneTransform, RuleSummarizeTransform,
+};
+pub use crate::guideline::GuidelinePinTransform;
+
 #[derive(Debug, Clone)]
 pub struct TransformContext {
     pub session_id: String,
@@ -80,6 +86,14 @@ impl TransformPipelineBuilder {
             .then(ConsumedResultMaskTransform)
             .then(RollingWindowTransform)
             .then(BudgetTrimTransform)
+    }
+
+    /// Full research pipeline (use [`crate::pipeline::build_pipeline`] for option-driven build).
+    pub fn with_research_defaults() -> Self {
+        Self::with_defaults()
+            .then(AgentOmitTransform)
+            .then(RuleSummarizeTransform::new(12))
+            .then(CachePackTransform)
     }
 
     pub fn then<T: Transform + 'static>(mut self, transform: T) -> Self {
@@ -203,7 +217,7 @@ impl Transform for ConsumedResultMaskTransform {
                 continue;
             }
             let block = &mut blocks[*block_idx];
-            if block.metadata.cold_ref.is_some() {
+            if block.metadata.cold_ref.is_some() || block.metadata.pinned {
                 continue;
             }
             let key = format!("tool-{}", block.id);

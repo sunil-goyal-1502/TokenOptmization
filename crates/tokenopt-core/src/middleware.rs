@@ -56,6 +56,7 @@ impl AgentMiddleware {
     ) -> Result<MiddlewareAction> {
         let mut opts = self.options.clone();
         opts.session_id = ctx.session_id.clone();
+        opts.turn_index = ctx.turn_index;
         let result = compile_context(messages, opts, self.store.clone(), self.oracle.clone()).await?;
         Ok(MiddlewareAction::Compiled(result))
     }

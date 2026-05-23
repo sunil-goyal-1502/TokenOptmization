@@ -12,9 +12,10 @@ use axum::{
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use tokenopt_core::{
-    analyze_trace, compare_trace, compile_context, metrics_snapshot, prometheus_text,
-    rehydrate_messages, AgentMiddleware, CompareReport, CompileOptions, CompileResult,
-    FileColdStore, OrchestratorAdapter, RehydrateOptions, TranscriptMessage,
+    analyze_trace, collapse_branch_messages, compare_trace, compile_context, metrics_snapshot,
+    prometheus_text, rehydrate_messages, AgentMiddleware, CompareReport, CompileOptions,
+    CompileResult, FileColdStore, FoldRecord, OrchestratorAdapter, RehydrateOptions,
+    TranscriptMessage,
 };
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -90,6 +91,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/middleware/before-model", post(before_model))
         .route("/v1/rehydrate", post(rehydrate))
         .route("/v1/compare", post(compare))
+        .route("/v1/fold/collapse", post(fold_collapse))
         .route("/v1/metrics", get(metrics))
         .route("/v1/metrics/prometheus", get(metrics_prometheus))
         .layer(CorsLayer::permissive())
@@ -148,6 +150,27 @@ async fn rehydrate(
 ) -> Result<Json<tokenopt_core::RehydrateResult>, AppError> {
     let result = rehydrate_messages(&req.messages, state.store.clone(), req.options).await?;
     Ok(Json(result))
+}
+
+#[derive(Debug, Deserialize)]
+struct FoldCollapseRequest {
+    pub messages: Vec<TranscriptMessage>,
+}
+
+#[derive(Debug, Serialize)]
+struct FoldCollapseResponse {
+    pub messages: Vec<TranscriptMessage>,
+    pub fold_records: Vec<FoldRecord>,
+}
+
+async fn fold_collapse(
+    Json(req): Json<FoldCollapseRequest>,
+) -> Result<Json<FoldCollapseResponse>, AppError> {
+    let (messages, fold_records) = collapse_branch_messages(&req.messages)?;
+    Ok(Json(FoldCollapseResponse {
+        messages,
+        fold_records,
+    }))
 }
 
 async fn compare(

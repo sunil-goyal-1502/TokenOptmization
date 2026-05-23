@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "pattern": "README",
+      "action": "keep",
+      "priority": 10
+    },
+    {
+      "pattern": "Cargo.toml",
+      "action": "keep",
+      "priority": 9
+    },
+    {
+      "pattern": "error:",
+      "action": "summarize",
+      "priority": 5
+    },
+    {
+      "pattern": "test failed",
+      "action": "summarize",
+      "priority": 6
+    }
+  ]
+}

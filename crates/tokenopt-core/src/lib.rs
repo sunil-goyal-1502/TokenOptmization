@@ -11,8 +11,14 @@
 pub mod compare;
 pub mod compile;
 pub mod error;
+pub mod extended_transforms;
 pub mod fold;
+pub mod fold_runtime;
+pub mod guideline;
 pub mod ir;
+pub mod llm;
+pub mod pipeline;
+pub mod routing;
 pub mod metrics;
 pub mod middleware;
 pub mod oracle;
@@ -26,7 +32,12 @@ pub mod transform;
 pub use compare::{bench_compile_latency, compare_trace, CompareReport, LatencyBenchReport};
 pub use compile::{
     analyze_trace, compile_context, AnalyzeReport, CompileOptions, CompileResult, CompileStats,
+    TransformToggles,
 };
+pub use fold_runtime::collapse_branch_messages;
+pub use guideline::{GuidelineAction, GuidelineBank, GuidelineRule};
+pub use llm::LlmConfig;
+pub use routing::{compute_routing_hint, ModelTier, RoutingHint};
 pub use metrics::{prometheus_text, snapshot as metrics_snapshot, MetricsSnapshot};
 pub use rehydrate::{
     extract_refs_from_text, rehydrate_messages, RehydrateOptions, RehydrateResult,

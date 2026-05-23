@@ -83,6 +83,12 @@ pub struct BlockMetadata {
     pub cold_ref: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub referents: Vec<String>,
+    /// ACON / guideline bank: never mask or drop this block.
+    #[serde(default)]
+    pub pinned: bool,
+    /// Context-folding branch id for collapse merge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch_id: Option<String>,
 }
 
 /// Parse a transcript into compiler IR blocks.
@@ -148,6 +154,22 @@ pub fn parse_transcript(messages: &[TranscriptMessage]) -> Result<Vec<ContextBlo
                         });
                     }
                 }
+            }
+            "fold" => {
+                let content = extract_text(msg);
+                let branch_id = msg.name.clone();
+                blocks.push(ContextBlock {
+                    id: format!("fold-{turn_index}"),
+                    kind: BlockKind::Summary,
+                    content,
+                    tool_call_id: None,
+                    tool_name: None,
+                    metadata: BlockMetadata {
+                        turn_index,
+                        branch_id,
+                        ..Default::default()
+                    },
+                });
             }
             "tool" => {
                 let content = extract_text(msg);

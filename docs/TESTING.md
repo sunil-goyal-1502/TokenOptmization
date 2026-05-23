@@ -13,7 +13,22 @@ Token optimization is measured as **fewer tokens sent to the model** on each tur
 | **sufficiency oracle** | Rule-based check that required slots still appear in context | Quality gate (can block or soft-fail) |
 | **rolling_window** | Drops middle blocks when over budget; inserts summary marker | Traces exceeding `token_budget` after masking |
 
-**Not implemented yet:** LLM summarization, ACON guideline bank, prompt-cache layout, model routing.
+**Also available (research pipeline, toggled via `CompileOptions.transforms`):**
+
+| Transform | What it does |
+|-----------|--------------|
+| **rule_summarize** | Collapses old middle blocks into a summary + cold ref |
+| **guideline_pin** | ACON-style pin/summarize by pattern (`fixtures/guidelines/default.json`) |
+| **fold_inject / fold_collapse** | Inject `FoldRecord` handoffs; collapse `role: fold` branches |
+| **cache_packer** | Stable prompt-cache ordering (system → summaries → tail) |
+| **agent_omit** | Drop low-value assistant filler before tools |
+| **memory_prune** | MEM1-style drop of very old tool results (opt-in) |
+| **external_compress** | HTTP hook for LLMLingua-2 sidecar (`external_compress_url`) |
+| **routing_hint** | Suggests `fast` vs `full` model tier on compile result |
+| **llm_oracle** | Optional LLM sufficiency check (`llm-http` feature + API key) |
+| **auto_rehydrate_refs** | Expand cold-store refs before compile when enabled |
+
+**Still external / future:** trained FoldGRPO policies, native pyo3/napi, published packages, SWE-bench-scale harness.
 
 ---
 

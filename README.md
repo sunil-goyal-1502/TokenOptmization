@@ -113,7 +113,7 @@ let result = compile_context(&messages, CompileOptions::default(), store, None).
 ## Compiler pipeline
 
 1. **Parse** transcript → typed IR (`system`, `tool_result`, …)
-2. **Transform** — referential keep, error compaction, consumed-result masking, budget trim
+2. **Transform** — referential keep, guideline bank (ACON), fold inject/collapse, error compaction, consumed-result masking, agent-omit, rule summarization, cache packer, rolling window, budget trim
 3. **Sufficiency oracle** — verify required slots still present (or soft-fail / passthrough)
 4. **Emit** compiled messages + stats + cold-store refs (`ref://session/key`)
 
@@ -125,6 +125,10 @@ let result = compile_context(&messages, CompileOptions::default(), store, None).
 | `POST /v1/analyze` | Token breakdown by block kind |
 | `POST /v1/compile` | Full compile with stats |
 | `POST /v1/middleware/before-model` | Drop-in pre-LLM hook |
+| `POST /v1/compare` | Baseline vs compiled on same trace |
+| `POST /v1/rehydrate` | Expand `ref://` cold-store payloads |
+| `POST /v1/fold/collapse` | Merge `role: fold` branch messages into `FoldRecord`s |
+| `GET /v1/metrics` | Compile counters snapshot |
 
 ## Schemas
 
