@@ -123,7 +123,56 @@ python examples/test_agent_loop.py
 
 ---
 
-## Level 5 — Production validation checklist
+## Level 5 — Real LLM agent E2E (actual model + real tools)
+
+This is **not** the synthetic `bench agent-loop`. It calls a **real model** (OpenAI or Ollama) and runs **real** `read_file` / `grep` / `list_dir` on this repo.
+
+### Prerequisites
+
+```bash
+# 1. TokenOpt server
+cargo run -p tokenopt-server -- --bind 127.0.0.1:8787
+
+# 2. LLM provider (pick one)
+export OPENAI_API_KEY=sk-...          # OpenAI — gpt-4o-mini, native tools
+# OR
+ollama serve && ollama pull tinyllama  # Local — free, no API key
+export TOKENOPT_E2E_PROVIDER=ollama
+
+# 3. Python deps
+pip install -r examples/e2e/requirements.txt
+pip install -e bindings/python
+```
+
+### Run
+
+```bash
+./scripts/run_real_agent_e2e.sh --turns 6 --padding-kb 6
+# or
+python3 examples/e2e/run_real_agent_e2e.py --provider ollama --turns 6 --padding-kb 6
+```
+
+**What it measures:** On each turn, before the LLM call, it compares message JSON size **with vs without** `POST /v1/compile` on the **same** transcript. That is what your orchestrator would bill as input tokens (use provider `usage.prompt_tokens` when on OpenAI).
+
+**Example (Ollama + tinyllama, 5 turns, 6KB padding per tool):**
+
+```
+reduction: 51.0%
+turn 5 list_dir  base_chars 43796  opt_chars 8721  saved 80.1%
+```
+
+### OpenAI (recommended for production-like metrics)
+
+```bash
+export OPENAI_API_KEY=sk-...
+python3 examples/e2e/run_real_agent_e2e.py --provider openai --model gpt-4o-mini --turns 8
+```
+
+Use `--dual-run` only if you want two separate full agent runs (slower; small models are non-deterministic so API totals may not decrease even when context shrinks).
+
+---
+
+## Level 6 — Production validation checklist
 
 - [ ] **Token delta:** input tokens ↓ ≥20% on 20+ turn coding tasks  
 - [ ] **Quality:** task success rate within ~2% of baseline  

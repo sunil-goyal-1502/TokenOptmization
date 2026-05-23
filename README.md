@@ -17,6 +17,12 @@ Rust gives a single correct implementation with predictable latency; Python and 
 
 See **[docs/TESTING.md](docs/TESTING.md)** for the full guide.
 
+**Real agent E2E (Ollama or OpenAI + real repo tools):** see [docs/TESTING.md](docs/TESTING.md#level-5--real-llm-agent-e2e-actual-model--real-tools)
+
+```bash
+./scripts/run_real_agent_e2e.sh
+```
+
 **Quick proof (synthetic agent loop, no API keys):**
 
 ```bash

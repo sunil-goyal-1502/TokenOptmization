@@ -1,0 +1,39 @@
+{
+  "provider": "ollama",
+  "model": "tinyllama",
+  "turns": 5,
+  "padding_kb": 6,
+  "char_reduction_percent": 50.98536695728056,
+  "optimized_turns": [
+    {
+      "turn": 1,
+      "tool": "read_file",
+      "baseline_chars": 280,
+      "optimized_chars": 280
+    },
+    {
+      "turn": 2,
+      "tool": "read_file",
+      "baseline_chars": 11913,
+      "optimized_chars": 11913
+    },
+    {
+      "turn": 3,
+      "tool": "read_file",
+      "baseline_chars": 24883,
+      "optimized_chars": 17207
+    },
+    {
+      "turn": 4,
+      "tool": "grep",
+      "baseline_chars": 42889,
+      "optimized_chars": 22540
+    },
+    {
+      "turn": 5,
+      "tool": "list_dir",
+      "baseline_chars": 43796,
+      "optimized_chars": 8721
+    }
+  ]
+}
