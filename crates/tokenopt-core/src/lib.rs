@@ -45,7 +45,10 @@ pub use oracle::{
     SufficiencyResult,
 };
 pub use store::{ColdStore, FileColdStore, MemoryColdStore, StoreRef};
-pub use tokens::{estimate_blocks_tokens, estimate_tokens};
+pub use tokens::{
+    estimate_blocks_tokens, estimate_messages_tokens, estimate_tokens, estimate_tokens_for_model,
+    token_count_method, TokenCountMethod,
+};
 pub use simulate::{
     generate_agent_trace, simulate_agent_loop, AgentLoopReport, AgentLoopSimConfig, TurnMetrics,
 };

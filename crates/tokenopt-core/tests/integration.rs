@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokenopt_core::{
     analyze_trace, compile_context, parse_transcript, AgentTrace, CompileOptions, MemoryColdStore,
-    TranscriptMessage,
+    MessageContent, TranscriptMessage,
 };
 
 fn fixture_messages() -> Vec<TranscriptMessage> {
@@ -45,6 +45,48 @@ fn analyze_reports_kinds() {
     let report = analyze_trace(&messages).expect("analyze");
     assert!(report.total_tokens > 0);
     assert!(report.block_count > 0);
+}
+
+#[tokio::test]
+async fn rolling_window_or_trim_reduces_over_budget_trace() {
+    let mut messages = fixture_messages();
+    for i in 2..25 {
+        messages.push(TranscriptMessage {
+            role: "assistant".into(),
+            content: Some(MessageContent::Text(format!("step {i}"))),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+        });
+        messages.push(TranscriptMessage {
+            role: "tool".into(),
+            content: Some(MessageContent::Text("x".repeat(4_000))),
+            name: None,
+            tool_calls: None,
+            tool_call_id: Some(format!("call_{i}")),
+        });
+    }
+    let store = Arc::new(MemoryColdStore::new());
+    let result = compile_context(
+        &messages,
+        CompileOptions {
+            session_id: "rolling".into(),
+            token_budget: 3_000,
+            enable_consumed_masking: false,
+            keep_recent_tool_results: 50,
+            run_sufficiency_check: false,
+            ..Default::default()
+        },
+        store,
+        None,
+    )
+    .await
+    .expect("compile");
+    let text = serde_json::to_string(&result.messages).unwrap();
+    assert!(
+        text.contains("rolling_window") || result.stats.blocks_out < messages.len(),
+        "expected rolling_window summary or fewer blocks"
+    );
 }
 
 #[test]

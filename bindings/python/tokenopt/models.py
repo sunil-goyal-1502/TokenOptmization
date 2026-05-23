@@ -29,6 +29,24 @@ class CompileOptions(BaseModel):
     subgoals: list[Subgoal] = Field(default_factory=list)
     infer_subgoals: bool = True
     soft_sufficiency: bool = False
+    token_count_model: str | None = None
+
+
+class CompareReport(BaseModel):
+    baseline_tokens: int
+    compiled_tokens: int
+    tokens_saved: int
+    reduction_percent: float
+    baseline_message_chars: int
+    compiled_message_chars: int
+    char_reduction_percent: float
+    compile_duration_ms: int
+    transform_duration_ms: int
+    oracle_duration_ms: int
+    cold_refs_count: int
+    sufficient: bool
+    transforms_applied: list[str] = Field(default_factory=list)
+    token_count_method: str = "heuristic"
 
 
 class CompileStats(BaseModel):
@@ -43,6 +61,7 @@ class CompileStats(BaseModel):
     transform_duration_ms: int = 0
     oracle_duration_ms: int = 0
     cold_refs_count: int = 0
+    token_count_method: str = "heuristic"
 
 
 class CompileResult(BaseModel):

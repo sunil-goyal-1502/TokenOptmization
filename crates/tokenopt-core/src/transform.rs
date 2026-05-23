@@ -14,6 +14,8 @@ pub struct TransformContext {
     pub keep_recent_tool_results: usize,
     pub error_compaction_after_turns: u32,
     pub enable_consumed_masking: bool,
+    /// When over budget, keep this many trailing blocks before budget_trim.
+    pub rolling_tail_blocks: usize,
 }
 
 #[async_trait]
@@ -235,17 +237,51 @@ impl Transform for RollingWindowTransform {
         ctx: &TransformContext,
         _store: Arc<dyn ColdStore>,
     ) -> Result<Vec<ContextBlock>> {
-        let total = estimate_tokens(
-            &blocks
-                .iter()
-                .map(|b| b.content.as_str())
-                .collect::<Vec<_>>()
-                .join(""),
-        );
+        let total: u64 = blocks.iter().map(|b| estimate_tokens(&b.content)).sum();
         if total <= ctx.token_budget {
             return Ok(blocks);
         }
-        Ok(blocks)
+
+        let tail = ctx.rolling_tail_blocks.max(4);
+        if blocks.len() <= tail + 2 {
+            return Ok(blocks);
+        }
+
+        let protected = [
+            BlockKind::System,
+            BlockKind::ToolSchema,
+            BlockKind::Summary,
+        ];
+        let mut prefix_end = 0usize;
+        for (i, b) in blocks.iter().enumerate() {
+            if protected.contains(&b.kind) {
+                prefix_end = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        let tail_start = blocks.len().saturating_sub(tail);
+        if tail_start <= prefix_end {
+            return Ok(blocks);
+        }
+
+        let mut out = Vec::new();
+        out.extend(blocks[..prefix_end].iter().cloned());
+        out.push(ContextBlock {
+            id: format!("rolled-{}", uuid::Uuid::new_v4()),
+            kind: BlockKind::Summary,
+            content: format!(
+                "[rolling_window] omitted {} middle blocks ({} tokens) — use cold-store refs to recover",
+                tail_start - prefix_end,
+                total.saturating_sub(ctx.token_budget)
+            ),
+            tool_call_id: None,
+            tool_name: None,
+            metadata: Default::default(),
+        });
+        out.extend(blocks[tail_start..].iter().cloned());
+        Ok(out)
     }
 }
 

@@ -3,6 +3,7 @@
 from tokenopt.client import TokenOptClient, TokenOptConfig
 from tokenopt.models import (
     AnalyzeReport,
+    CompareReport,
     CompileOptions,
     CompileResult,
     CompileStats,
@@ -15,6 +16,7 @@ __all__ = [
     "TokenOptClient",
     "TokenOptConfig",
     "AnalyzeReport",
+    "CompareReport",
     "CompileOptions",
     "CompileResult",
     "CompileStats",

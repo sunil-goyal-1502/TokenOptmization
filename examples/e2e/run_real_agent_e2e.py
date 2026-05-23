@@ -35,6 +35,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tools import execute_tool_call, tools_schema  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")
+    load_dotenv()
+except ImportError:
+    pass
+
 sys.path.insert(0, str(ROOT / "bindings" / "python"))
 from tokenopt import CompileOptions, TokenOptClient, TokenOptConfig  # noqa: E402
 

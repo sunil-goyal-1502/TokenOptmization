@@ -11,7 +11,7 @@ Token optimization is measured as **fewer tokens sent to the model** on each tur
 | **referential_keep** | Tracks paths/symbols in recent turns for sufficiency | Supports oracle; minor alone |
 | **budget_trim** | Drops middle blocks when over `token_budget` | Very long traces exceeding budget |
 | **sufficiency oracle** | Rule-based check that required slots still appear in context | Quality gate (can block or soft-fail) |
-| **rolling_window** | Placeholder (no-op today) | — |
+| **rolling_window** | Drops middle blocks when over budget; inserts summary marker | Traces exceeding `token_budget` after masking |
 
 **Not implemented yet:** LLM summarization, ACON guideline bank, prompt-cache layout, model routing.
 
@@ -187,6 +187,31 @@ cargo run -p tokenopt-cli -- bench latency --iterations 100 --sim-turns 20
 
 Server metrics: `GET /v1/metrics` — see [METRICS.md](METRICS.md).
 
+HTTP compare (same as `ctxc compare`):
+
+```bash
+curl -s http://127.0.0.1:8787/v1/compare \
+  -H 'Content-Type: application/json' \
+  -d '{"messages": [...], "options": {"keep_recent_tool_results": 2}}'
+```
+
+---
+
+## Level 5c — Quality A/B (task success + tokens + latency)
+
+Runs each task in `examples/e2e/quality_tasks.json` twice (baseline vs TokenOpt) with the **same** planned tool steps.
+
+```bash
+export OPENAI_API_KEY=sk-...   # or use .env at repo root (not committed)
+./scripts/run_quality_ab.sh --provider openai
+# or
+python3 examples/e2e/run_quality_ab.py --provider openai
+```
+
+Output: `examples/e2e/quality_ab_report.json` — per-task success, `usage.prompt_tokens`, `compile_duration_ms`, wall-clock.
+
+`.env` is loaded automatically via `python-dotenv` when installed.
+
 ---
 
 ## Level 6 — Production validation checklist
@@ -201,6 +226,6 @@ Server metrics: `GET /v1/metrics` — see [METRICS.md](METRICS.md).
 
 ## Honest limitations today
 
-- Token counts are **estimates** unless you plug tiktoken into your harness.  
+- Token counts are **estimates** (`chars/4`) unless you build with `--features accurate-tokens` on `tokenopt-core`.  
 - Small fixtures (~6 messages) show **0%** savings — you need long traces or `bench agent-loop`.  
 - No end-to-end test with OpenAI/Anthropic billing yet — that’s your orchestrator + API keys.

@@ -1,0 +1,34 @@
+{
+  "tasks": [
+    {
+      "id": "explore-core",
+      "description": "Read core compiler sources and grep for compile_context",
+      "steps": [
+        ["read_file", {"path": "crates/tokenopt-core/src/lib.rs"}],
+        ["read_file", {"path": "crates/tokenopt-core/src/compile.rs"}],
+        ["grep", {"pattern": "compile_context", "path": "crates/tokenopt-core"}]
+      ],
+      "success_contains": ["compile_context", "tokenopt"]
+    },
+    {
+      "id": "explore-transforms",
+      "description": "Inspect transforms and list crates directory",
+      "steps": [
+        ["read_file", {"path": "crates/tokenopt-core/src/transform.rs"}],
+        ["grep", {"pattern": "RollingWindow", "path": "crates/tokenopt-core"}],
+        ["list_dir", {"path": "crates"}]
+      ],
+      "success_contains": ["Transform", "tokenopt-core"]
+    },
+    {
+      "id": "docs-and-readme",
+      "description": "Read testing docs and README",
+      "steps": [
+        ["read_file", {"path": "docs/TESTING.md"}],
+        ["read_file", {"path": "README.md"}],
+        ["grep", {"pattern": "bench", "path": "docs"}]
+      ],
+      "success_contains": ["test", "TokenOpt"]
+    }
+  ]
+}

@@ -35,6 +35,9 @@ pub struct CompileOptions {
     /// When true, sufficiency failure returns original messages with `sufficient: false` instead of error.
     #[serde(default)]
     pub soft_sufficiency: bool,
+    /// Model name for accurate token counting when `accurate-tokens` feature is enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_count_model: Option<String>,
 }
 
 fn default_keep_recent() -> usize {
@@ -59,6 +62,7 @@ impl Default for CompileOptions {
             subgoals: vec![],
             infer_subgoals: true,
             soft_sufficiency: false,
+            token_count_model: None,
         }
     }
 }
@@ -76,6 +80,7 @@ pub struct CompileStats {
     pub transform_duration_ms: u64,
     pub oracle_duration_ms: u64,
     pub cold_refs_count: usize,
+    pub token_count_method: crate::tokens::TokenCountMethod,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -128,6 +133,7 @@ async fn compile_context_inner(
         keep_recent_tool_results: options.keep_recent_tool_results,
         error_compaction_after_turns: options.error_compaction_after_turns,
         enable_consumed_masking: options.enable_consumed_masking,
+        rolling_tail_blocks: 16,
     };
 
     let pipeline = TransformPipelineBuilder::with_defaults().build();
@@ -216,6 +222,7 @@ async fn compile_context_inner(
             transform_duration_ms: transform_ms,
             oracle_duration_ms: oracle_ms,
             cold_refs_count,
+            token_count_method: crate::tokens::token_count_method(),
         },
         sufficient: sufficiency.sufficient,
         sufficiency_message: sufficiency.message,

@@ -5,7 +5,13 @@ from typing import Any
 
 import httpx
 
-from tokenopt.models import AnalyzeReport, CompileOptions, CompileResult, TranscriptMessage
+from tokenopt.models import (
+    AnalyzeReport,
+    CompareReport,
+    CompileOptions,
+    CompileResult,
+    TranscriptMessage,
+)
 
 
 @dataclass
@@ -62,26 +68,15 @@ class TokenOptClient:
         self,
         messages: list[TranscriptMessage | dict[str, Any]],
         options: CompileOptions | None = None,
-    ) -> dict[str, Any]:
+    ) -> CompareReport:
         opts = options or CompileOptions()
         payload = {
             "messages": [_serialize(m) for m in messages],
-            "options": opts.model_dump(),
+            "options": opts.model_dump(exclude_none=True),
         }
-        # Compare is CLI-only today; use compile stats + manual baseline via analyze
-        analyze = self.analyze(messages)
-        compiled = self.compile(messages, opts)
-        return {
-            "baseline_tokens": analyze.total_tokens,
-            "compiled_tokens": compiled.stats.output_tokens,
-            "tokens_saved": compiled.stats.tokens_saved,
-            "reduction_percent": compiled.stats.reduction_percent,
-            "compile_duration_ms": compiled.stats.compile_duration_ms,
-            "transform_duration_ms": compiled.stats.transform_duration_ms,
-            "oracle_duration_ms": compiled.stats.oracle_duration_ms,
-            "cold_refs_count": compiled.stats.cold_refs_count,
-            "sufficient": compiled.sufficient,
-        }
+        r = self._client.post("/v1/compare", json=payload)
+        r.raise_for_status()
+        return CompareReport.model_validate(r.json())
 
     def metrics(self) -> dict[str, Any]:
         r = self._client.get("/v1/metrics")

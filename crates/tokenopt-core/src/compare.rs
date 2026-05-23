@@ -8,7 +8,7 @@ use crate::compile::{compile_context, CompileOptions, CompileResult};
 use crate::error::Result;
 use crate::ir::TranscriptMessage;
 use crate::store::ColdStore;
-use crate::tokens::estimate_blocks_tokens;
+use crate::tokens::{estimate_messages_tokens, token_count_method, TokenCountMethod};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompareReport {
@@ -25,6 +25,7 @@ pub struct CompareReport {
     pub cold_refs_count: usize,
     pub sufficient: bool,
     pub transforms_applied: Vec<String>,
+    pub token_count_method: TokenCountMethod,
 }
 
 pub async fn compare_trace(
@@ -32,9 +33,11 @@ pub async fn compare_trace(
     options: CompileOptions,
     store: Arc<dyn ColdStore>,
 ) -> Result<CompareReport> {
-    let baseline_tokens = estimate_blocks_tokens(
-        &crate::ir::parse_transcript(messages)?,
-    );
+    let model = options
+        .token_count_model
+        .clone()
+        .unwrap_or_else(|| "gpt-4o-mini".into());
+    let baseline_tokens = estimate_messages_tokens(messages, &model);
     let baseline_chars = message_json_chars(messages);
 
     let compiled: CompileResult = compile_context(messages, options, store, None).await?;
@@ -64,6 +67,7 @@ pub async fn compare_trace(
         cold_refs_count,
         sufficient: compiled.sufficient,
         transforms_applied: compiled.stats.transforms_applied,
+        token_count_method: token_count_method(),
     })
 }
 
