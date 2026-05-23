@@ -1,6 +1,9 @@
 node_modules/
+__pycache__/
+*.pyc
 target/
 dist/
+examples/e2e/last_report.json
 *.tsbuildinfo
 .DS_Store
 coverage/
