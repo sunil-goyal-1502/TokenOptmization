@@ -11,6 +11,7 @@ use crate::oracle::{
     infer_subgoals_from_blocks, CompositeOracle, RuleOracle, Subgoal, SufficiencyOracle,
     SufficiencyResult,
 };
+use crate::metrics::{record_compile_error, record_compile_success};
 use crate::store::ColdStore;
 use crate::tokens::{estimate_blocks_tokens, estimate_tokens};
 use crate::transform::{TransformContext, TransformPipelineBuilder};
@@ -71,6 +72,10 @@ pub struct CompileStats {
     pub blocks_in: usize,
     pub blocks_out: usize,
     pub transforms_applied: Vec<String>,
+    pub compile_duration_ms: u64,
+    pub transform_duration_ms: u64,
+    pub oracle_duration_ms: u64,
+    pub cold_refs_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +94,21 @@ pub async fn compile_context(
     store: Arc<dyn ColdStore>,
     oracle: Option<Arc<dyn SufficiencyOracle>>,
 ) -> Result<CompileResult> {
+    let result = compile_context_inner(messages, options, store, oracle).await;
+    match &result {
+        Ok(r) => record_compile_success(r.stats.compile_duration_ms),
+        Err(_) => record_compile_error(),
+    }
+    result
+}
+
+async fn compile_context_inner(
+    messages: &[TranscriptMessage],
+    options: CompileOptions,
+    store: Arc<dyn ColdStore>,
+    oracle: Option<Arc<dyn SufficiencyOracle>>,
+) -> Result<CompileResult> {
+    let compile_start = std::time::Instant::now();
     let blocks_in = parse_transcript(messages)?;
     validate_blocks(&blocks_in)?;
     let input_tokens = estimate_blocks_tokens(&blocks_in);
@@ -109,7 +129,9 @@ pub async fn compile_context(
         .collect();
 
     let blocks_in_len = blocks_in.len();
+    let transform_start = std::time::Instant::now();
     let blocks_out = pipeline.run(blocks_in.clone(), &ctx, store.clone()).await?;
+    let transform_ms = transform_start.elapsed().as_millis() as u64;
 
     let subgoals = if options.subgoals.is_empty() && options.infer_subgoals {
         infer_subgoals_from_blocks(&blocks_in)
@@ -123,6 +145,7 @@ pub async fn compile_context(
         })
     });
 
+    let oracle_start = std::time::Instant::now();
     let sufficiency: SufficiencyResult = if options.run_sufficiency_check {
         oracle_impl.check(&blocks_out, &subgoals).await?
     } else {
@@ -132,6 +155,7 @@ pub async fn compile_context(
             message: None,
         }
     };
+    let oracle_ms = oracle_start.elapsed().as_millis() as u64;
 
     if options.run_sufficiency_check && !sufficiency.sufficient && !options.soft_sufficiency {
         return Err(CompilerError::SufficiencyFailed(
@@ -162,6 +186,12 @@ pub async fn compile_context(
         (tokens_saved as f64 / input_tokens as f64) * 100.0
     };
 
+    let cold_refs_count = final_blocks
+        .iter()
+        .filter(|b| b.metadata.cold_ref.is_some())
+        .count();
+    let compile_ms = compile_start.elapsed().as_millis() as u64;
+
     Ok(CompileResult {
         blocks: final_blocks,
         messages: final_messages,
@@ -173,6 +203,10 @@ pub async fn compile_context(
             blocks_in: blocks_in_len,
             blocks_out: final_blocks_len,
             transforms_applied,
+            compile_duration_ms: compile_ms,
+            transform_duration_ms: transform_ms,
+            oracle_duration_ms: oracle_ms,
+            cold_refs_count,
         },
         sufficient: sufficiency.sufficient,
         sufficiency_message: sufficiency.message,

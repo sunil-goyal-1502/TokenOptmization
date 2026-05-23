@@ -8,20 +8,28 @@
 //! - Run [`tokenopt-server`] and call from any language
 //! - Use Python/TypeScript clients over HTTP
 
+pub mod compare;
 pub mod compile;
 pub mod error;
 pub mod fold;
 pub mod ir;
+pub mod metrics;
 pub mod middleware;
 pub mod oracle;
+pub mod rehydrate;
 pub mod simulate;
 pub mod store;
 pub mod tokens;
 pub mod trace;
 pub mod transform;
 
+pub use compare::{bench_compile_latency, compare_trace, CompareReport, LatencyBenchReport};
 pub use compile::{
     analyze_trace, compile_context, AnalyzeReport, CompileOptions, CompileResult, CompileStats,
+};
+pub use metrics::{prometheus_text, snapshot as metrics_snapshot, MetricsSnapshot};
+pub use rehydrate::{
+    extract_refs_from_text, rehydrate_messages, RehydrateOptions, RehydrateResult,
 };
 pub use error::{CompilerError, Result};
 pub use fold::{FoldArtifact, FoldRecord, FoldStatus};

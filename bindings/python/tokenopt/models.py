@@ -39,6 +39,10 @@ class CompileStats(BaseModel):
     blocks_in: int
     blocks_out: int
     transforms_applied: list[str]
+    compile_duration_ms: int = 0
+    transform_duration_ms: int = 0
+    oracle_duration_ms: int = 0
+    cold_refs_count: int = 0
 
 
 class CompileResult(BaseModel):

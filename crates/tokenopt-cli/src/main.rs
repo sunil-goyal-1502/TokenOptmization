@@ -4,8 +4,8 @@ use std::sync::Arc;
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tokenopt_core::{
-    analyze_trace, compile_context, simulate_agent_loop, AgentLoopSimConfig, AgentTrace,
-    CompileOptions, FileColdStore, MemoryColdStore,
+    analyze_trace, bench_compile_latency, compare_trace, compile_context, simulate_agent_loop,
+    AgentLoopSimConfig, AgentTrace, CompileOptions, FileColdStore, MemoryColdStore,
 };
 use tracing_subscriber::EnvFilter;
 
@@ -47,6 +47,21 @@ enum Commands {
         #[arg(short, long)]
         trace: PathBuf,
     },
+    /// Compare baseline vs TokenOpt on the same trace (tokens + latency)
+    Compare {
+        #[arg(short, long)]
+        trace: PathBuf,
+        #[arg(short, long, default_value = "128000")]
+        budget: u64,
+        #[arg(short, long, default_value = "default")]
+        session: String,
+        #[arg(long, default_value = "2")]
+        keep_recent: usize,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        no_sufficiency: bool,
+    },
     /// Simulate multi-turn agent loop and measure token savings (no LLM)
     Bench {
         #[command(subcommand)]
@@ -56,6 +71,19 @@ enum Commands {
 
 #[derive(Subcommand)]
 enum BenchCommands {
+    /// Compile latency percentiles (see also `ctxc bench latency`)
+    Latency {
+        #[arg(short, long)]
+        trace: Option<PathBuf>,
+        #[arg(long, default_value = "100")]
+        iterations: u32,
+        #[arg(long, default_value = "15")]
+        sim_turns: u32,
+        #[arg(long, default_value = "8000")]
+        payload_bytes: usize,
+        #[arg(long)]
+        json: bool,
+    },
     /// Run synthetic agent loop; compiles context before each turn
     AgentLoop {
         #[arg(long, default_value = "20")]
@@ -105,6 +133,16 @@ async fn main() -> anyhow::Result<()> {
             .await
         }
         Commands::Validate { trace } => cmd_validate(trace).await,
+        Commands::Compare {
+            trace,
+            budget,
+            session,
+            keep_recent,
+            json,
+            no_sufficiency,
+        } => {
+            cmd_compare(trace, budget, session, keep_recent, json, no_sufficiency).await
+        }
         Commands::Bench { bench } => match bench {
             BenchCommands::AgentLoop {
                 turns,
@@ -126,6 +164,13 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await
             }
+            BenchCommands::Latency {
+                trace,
+                iterations,
+                sim_turns,
+                payload_bytes,
+                json,
+            } => cmd_bench_latency(trace, iterations, sim_turns, payload_bytes, json).await,
         },
     }
 }
@@ -193,9 +238,108 @@ async fn cmd_compile(
     }
 
     eprintln!(
-        "saved {} tokens ({:.1}%)",
-        result.stats.tokens_saved, result.stats.reduction_percent
+        "saved {} tokens ({:.1}%) | compile {}ms (transform {}ms, oracle {}ms) | cold_refs {}",
+        result.stats.tokens_saved,
+        result.stats.reduction_percent,
+        result.stats.compile_duration_ms,
+        result.stats.transform_duration_ms,
+        result.stats.oracle_duration_ms,
+        result.stats.cold_refs_count,
     );
+    Ok(())
+}
+
+async fn cmd_compare(
+    trace: PathBuf,
+    budget: u64,
+    session: String,
+    keep_recent: usize,
+    json: bool,
+    no_sufficiency: bool,
+) -> anyhow::Result<()> {
+    let agent_trace = load_trace(&trace).await?;
+    let store = Arc::new(MemoryColdStore::new());
+    let report = compare_trace(
+        &agent_trace.messages,
+        CompileOptions {
+            session_id: session,
+            token_budget: budget,
+            keep_recent_tool_results: keep_recent,
+            run_sufficiency_check: !no_sufficiency,
+            ..Default::default()
+        },
+        store,
+    )
+    .await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+
+    println!("TokenOpt compare (same trace, baseline vs compiled)");
+    println!();
+    println!("Tokens:");
+    println!("  baseline:   {}", report.baseline_tokens);
+    println!("  compiled:   {}", report.compiled_tokens);
+    println!("  saved:      {} ({:.1}%)", report.tokens_saved, report.reduction_percent);
+    println!();
+    println!("Message JSON size:");
+    println!("  baseline:   {} chars", report.baseline_message_chars);
+    println!("  compiled:   {} chars", report.compiled_message_chars);
+    println!("  reduction:  {:.1}%", report.char_reduction_percent);
+    println!();
+    println!("Compiler latency (this run):");
+    println!("  total:      {} ms", report.compile_duration_ms);
+    println!("  transform:  {} ms", report.transform_duration_ms);
+    println!("  oracle:     {} ms", report.oracle_duration_ms);
+    println!("  cold refs:  {}", report.cold_refs_count);
+    println!("  sufficient: {}", report.sufficient);
+    Ok(())
+}
+
+async fn cmd_bench_latency(
+    trace: Option<PathBuf>,
+    iterations: u32,
+    sim_turns: u32,
+    payload_bytes: usize,
+    json: bool,
+) -> anyhow::Result<()> {
+    let messages = if let Some(path) = trace {
+        load_trace(&path).await?.messages
+    } else {
+        tokenopt_core::generate_agent_trace(&AgentLoopSimConfig {
+            turns: sim_turns,
+            tool_payload_bytes: payload_bytes,
+            ..Default::default()
+        })
+    };
+
+    let store = Arc::new(MemoryColdStore::new());
+    let report = bench_compile_latency(
+        &messages,
+        CompileOptions {
+            session_id: "latency-bench".into(),
+            run_sufficiency_check: false,
+            ..Default::default()
+        },
+        store,
+        iterations,
+    )
+    .await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+
+    println!("Compile latency bench ({} iterations, {} messages)", iterations, report.trace_messages);
+    println!("  p50:  {} ms", report.p50_ms);
+    println!("  p95:  {} ms", report.p95_ms);
+    println!("  p99:  {} ms", report.p99_ms);
+    println!("  min:  {} ms", report.min_ms);
+    println!("  max:  {} ms", report.max_ms);
+    println!("  mean: {:.1} ms", report.mean_ms);
     Ok(())
 }
 

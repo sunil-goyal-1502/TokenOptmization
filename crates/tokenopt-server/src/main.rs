@@ -12,8 +12,9 @@ use axum::{
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use tokenopt_core::{
-    analyze_trace, compile_context, AgentMiddleware, CompileOptions, CompileResult, FileColdStore,
-    OrchestratorAdapter, TranscriptMessage,
+    analyze_trace, compile_context, metrics_snapshot, prometheus_text, rehydrate_messages,
+    AgentMiddleware, CompileOptions, CompileResult, FileColdStore, OrchestratorAdapter,
+    RehydrateOptions, TranscriptMessage,
 };
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -61,6 +62,13 @@ struct MiddlewareRequest {
     pub options: CompileOptions,
 }
 
+#[derive(Debug, Deserialize)]
+struct RehydrateRequest {
+    pub messages: Vec<TranscriptMessage>,
+    #[serde(default)]
+    pub options: RehydrateOptions,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -80,6 +88,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/analyze", post(analyze))
         .route("/v1/compile", post(compile))
         .route("/v1/middleware/before-model", post(before_model))
+        .route("/v1/rehydrate", post(rehydrate))
+        .route("/v1/metrics", get(metrics))
+        .route("/v1/metrics/prometheus", get(metrics_prometheus))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -116,6 +127,25 @@ async fn compile(
         opts.session_id = uuid::Uuid::new_v4().to_string();
     }
     let result = compile_context(&req.messages, opts, state.store.clone(), None).await?;
+    Ok(Json(result))
+}
+
+async fn metrics() -> impl IntoResponse {
+    Json(metrics_snapshot())
+}
+
+async fn metrics_prometheus() -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        prometheus_text(),
+    )
+}
+
+async fn rehydrate(
+    State(state): State<AppState>,
+    Json(req): Json<RehydrateRequest>,
+) -> Result<Json<tokenopt_core::RehydrateResult>, AppError> {
+    let result = rehydrate_messages(&req.messages, state.store.clone(), req.options).await?;
     Ok(Json(result))
 }
 

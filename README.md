@@ -23,6 +23,16 @@ See **[docs/TESTING.md](docs/TESTING.md)** for the full guide.
 ./scripts/run_real_agent_e2e.sh
 ```
 
+**Measure tokens + compiler latency on the same trace:**
+
+```bash
+ctxc compare --trace /path/to/trace.json
+ctxc bench latency --iterations 100 --sim-turns 20
+curl http://127.0.0.1:8787/v1/metrics
+```
+
+See [docs/METRICS.md](docs/METRICS.md).
+
 **Quick proof (synthetic agent loop, no API keys):**
 
 ```bash

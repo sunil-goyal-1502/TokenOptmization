@@ -172,6 +172,23 @@ Use `--dual-run` only if you want two separate full agent runs (slower; small mo
 
 ---
 
+## Level 5b — Compare & latency (same trace)
+
+```bash
+# Generate long trace
+cargo run -p tokenopt-cli -- bench agent-loop --turns 20 --write-trace /tmp/long.json
+
+# Tokens + compiler latency on identical input
+cargo run -p tokenopt-cli -- compare --trace /tmp/long.json --keep-recent 2
+
+# p50/p95/p99 compile time
+cargo run -p tokenopt-cli -- bench latency --iterations 100 --sim-turns 20
+```
+
+Server metrics: `GET /v1/metrics` — see [METRICS.md](METRICS.md).
+
+---
+
 ## Level 6 — Production validation checklist
 
 - [ ] **Token delta:** input tokens ↓ ≥20% on 20+ turn coding tasks  
