@@ -52,7 +52,8 @@ fn analyze_json(messages_json: &str) -> PyResult<String> {
 }
 
 #[pymodule]
-fn tokenopt_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
+#[pyo3(name = "_native")]
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compile_json, m)?)?;
     m.add_function(wrap_pyfunction!(compare_json, m)?)?;
     m.add_function(wrap_pyfunction!(analyze_json, m)?)?;

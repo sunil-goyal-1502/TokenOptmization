@@ -31,10 +31,9 @@ from pathlib import Path
 from typing import Any
 
 # Allow imports from examples/e2e
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tools import execute_tool_call, tools_schema  # noqa: E402
-
-ROOT = Path(__file__).resolve().parents[2]
 
 try:
     from dotenv import load_dotenv
@@ -45,7 +44,7 @@ except ImportError:
     pass
 
 sys.path.insert(0, str(ROOT / "bindings" / "python"))
-from tokenopt import CompileOptions, TokenOptClient, TokenOptConfig  # noqa: E402
+from tokenopt import CompileOptions, TokenOptClient, TokenOptConfig, TransformToggles  # noqa: E402
 
 
 PLANNED_STEPS = [
@@ -129,18 +128,50 @@ def messages_char_count(messages: list[dict]) -> int:
     return len(json.dumps(messages, ensure_ascii=False))
 
 
-def compile_messages(
-    client: TokenOptClient,
-    messages: list[dict],
-    session_id: str,
-    budget: int,
-) -> list[dict]:
-    opts = CompileOptions(
+def research_compile_options(session_id: str, budget: int) -> CompileOptions:
+    sidecar = os.environ.get(
+        "TOKENOPT_COMPRESS_URL", "http://127.0.0.1:8790/compress"
+    )
+    return CompileOptions(
         session_id=session_id,
         token_budget=budget,
         keep_recent_tool_results=2,
         soft_sufficiency=True,
         run_sufficiency_check=False,
+        transforms=TransformToggles(
+            guideline_bank=True,
+            fold_policy=True,
+            summarization=True,
+            external_compress=True,
+            memory_prune=True,
+            agent_omit=True,
+            cache_packer=True,
+        ),
+        guideline_bank_path=str(ROOT / "fixtures/guidelines/default.json"),
+        fold_policy_path=str(ROOT / "fixtures/fold_policies/default.json"),
+        external_compress_url=sidecar,
+        routing_hints=True,
+    )
+
+
+def compile_messages(
+    client: TokenOptClient,
+    messages: list[dict],
+    session_id: str,
+    budget: int,
+    *,
+    research: bool = False,
+) -> list[dict]:
+    opts = (
+        research_compile_options(session_id, budget)
+        if research
+        else CompileOptions(
+            session_id=session_id,
+            token_budget=budget,
+            keep_recent_tool_results=2,
+            soft_sufficiency=True,
+            run_sufficiency_check=False,
+        )
     )
     result = client.compile(messages, opts)
     return [m.model_dump(exclude_none=True) for m in result.messages]
@@ -153,6 +184,8 @@ def run_single_trajectory(
     turns: int,
     padding_kb: int,
     budget: int,
+    *,
+    research: bool = False,
 ) -> tuple[list[dict], list[TurnRecord]]:
     """One real agent run: each turn logs baseline vs compiled size before the LLM call."""
     records: list[TurnRecord] = []
@@ -179,7 +212,9 @@ def run_single_trajectory(
     for turn in range(1, turns + 1):
         tool_name, tool_args = PLANNED_STEPS[(turn - 1) % len(PLANNED_STEPS)]
         baseline_chars = messages_char_count(messages)
-        compiled = compile_messages(tokenopt, messages, session_id, budget)
+        compiled = compile_messages(
+            tokenopt, messages, session_id, budget, research=research
+        )
         optimized_chars = messages_char_count(compiled)
 
         assistant, usage = chat_completion(llm_client, model, compiled, use_tools=False)
@@ -349,6 +384,11 @@ def main() -> int:
         action="store_true",
         help="Run two full agent loops (baseline vs tokenopt); costly, non-deterministic",
     )
+    parser.add_argument(
+        "--research",
+        action="store_true",
+        help="Enable full research pipeline (guideline, fold policy, sidecar compress, etc.)",
+    )
     args = parser.parse_args()
 
     provider = args.provider or os.environ.get("TOKENOPT_E2E_PROVIDER", "openai")
@@ -368,6 +408,8 @@ def main() -> int:
 
     print(f"Real agent E2E — provider={provider} model={model} turns={args.turns}")
     print(f"Tool padding: {args.padding_kb} KB/result | tokenopt={args.tokenopt_url}")
+    if args.research:
+        print(f"Research pipeline ON | compress={os.environ.get('TOKENOPT_COMPRESS_URL', 'http://127.0.0.1:8790/compress')}")
     print()
 
     try:
@@ -398,7 +440,13 @@ def main() -> int:
         else:
             print("=== Single trajectory (real LLM + real tools + TokenOpt each turn) ===")
             _messages, turns_data = run_single_trajectory(
-                llm, model, tok, args.turns, args.padding_kb, args.budget
+                llm,
+                model,
+                tok,
+                args.turns,
+                args.padding_kb,
+                args.budget,
+                research=args.research,
             )
 
         b_chars = sum(t.baseline_messages_chars for t in turns_data)
