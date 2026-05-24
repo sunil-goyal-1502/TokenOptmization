@@ -31,7 +31,11 @@ pub enum GuidelineAction {
 
 impl GuidelineBank {
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
-        let text = std::fs::read_to_string(path.as_ref())
+        let path_ref = path.as_ref();
+        if let Some(s) = path_ref.to_str() {
+            crate::path_util::validate_config_path(s)?;
+        }
+        let text = std::fs::read_to_string(path_ref)
             .map_err(|e| CompilerError::Other(format!("guideline bank: {e}")))?;
         serde_json::from_str(&text).map_err(CompilerError::Serde)
     }

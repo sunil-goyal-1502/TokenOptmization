@@ -24,6 +24,7 @@ pub mod routing;
 pub mod metrics;
 pub mod middleware;
 pub mod oracle;
+pub mod path_util;
 pub mod rehydrate;
 pub mod simulate;
 pub mod store;

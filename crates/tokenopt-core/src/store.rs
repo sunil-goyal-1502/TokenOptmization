@@ -77,6 +77,27 @@ pub struct FileColdStore {
     root: PathBuf,
 }
 
+/// Reject path traversal in cold-store session ids and keys.
+fn sanitize_store_component(component: &str, label: &str) -> Result<String> {
+    if component.is_empty() {
+        return Err(CompilerError::Store(format!("empty {label}")));
+    }
+    if component.contains('/') || component.contains('\\') || component.contains("..") {
+        return Err(CompilerError::Store(format!(
+            "invalid {label} (path separators forbidden): {component}"
+        )));
+    }
+    if !component
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        return Err(CompilerError::Store(format!(
+            "invalid {label} (allowed: alnum, -, _, .): {component}"
+        )));
+    }
+    Ok(component.to_string())
+}
+
 impl FileColdStore {
     pub fn new(root: impl AsRef<Path>) -> Self {
         Self {
@@ -84,8 +105,10 @@ impl FileColdStore {
         }
     }
 
-    fn path_for(&self, session_id: &str, key: &str) -> PathBuf {
-        self.root.join(session_id).join(format!("{key}.bin"))
+    fn path_for(&self, session_id: &str, key: &str) -> Result<PathBuf> {
+        let session_id = sanitize_store_component(session_id, "session_id")?;
+        let key = sanitize_store_component(key, "key")?;
+        Ok(self.root.join(session_id).join(format!("{key}.bin")))
     }
 
     pub fn uri_for(session_id: &str, key: &str) -> String {
@@ -96,7 +119,7 @@ impl FileColdStore {
 #[async_trait]
 impl ColdStore for FileColdStore {
     async fn put(&self, session_id: &str, key: &str, payload: &[u8]) -> Result<StoreRef> {
-        let path = self.path_for(session_id, key);
+        let path = self.path_for(session_id, key)?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await.map_err(|e| {
                 CompilerError::Store(format!("create dir {}: {e}", parent.display()))
@@ -122,7 +145,7 @@ impl ColdStore for FileColdStore {
         }
         let session_id = parts[0];
         let key = parts[1..].join("/");
-        let path = self.path_for(session_id, &key);
+        let path = self.path_for(session_id, &key)?;
         fs::read(&path)
             .await
             .map_err(|e| CompilerError::Store(format!("read {}: {e}", path.display())))
