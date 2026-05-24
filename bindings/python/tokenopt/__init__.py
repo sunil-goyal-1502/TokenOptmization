@@ -8,8 +8,15 @@ from tokenopt.models import (
     CompileResult,
     CompileStats,
     FoldRecord,
+    RoutingHint,
+    TransformToggles,
     TranscriptMessage,
 )
+
+try:
+    from tokenopt import native as _native_mod
+except ImportError:
+    _native_mod = None
 
 __version__ = "0.1.0"
 __all__ = [
@@ -17,6 +24,8 @@ __all__ = [
     "TokenOptConfig",
     "AnalyzeReport",
     "CompareReport",
+    "TransformToggles",
+    "RoutingHint",
     "CompileOptions",
     "CompileResult",
     "CompileStats",

@@ -7,10 +7,12 @@ use crate::ir::{BlockKind, ContextBlock};
 use crate::store::ColdStore;
 use crate::tokens::estimate_tokens;
 
+pub use crate::bacm::BacmTransform;
 pub use crate::extended_transforms::{
     AgentOmitTransform, CachePackTransform, ExternalCompressTransform, FoldCollapseTransform,
-    FoldInjectTransform, MemoryPruneTransform, RuleSummarizeTransform,
+    FoldInjectTransform, LlmSummarizeTransform, MemoryPruneTransform, RuleSummarizeTransform,
 };
+pub use crate::fold_policy::FoldPolicyTransform;
 pub use crate::guideline::GuidelinePinTransform;
 
 #[derive(Debug, Clone)]

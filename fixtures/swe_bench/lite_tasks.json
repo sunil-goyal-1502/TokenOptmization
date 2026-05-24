@@ -1,0 +1,26 @@
+{
+  "description": "SWE-bench-lite style tasks (compile-on-trace; no Docker eval in CI)",
+  "tasks": [
+    {
+      "instance_id": "tokenopt__core-compile",
+      "repo": "TokenOptmization",
+      "problem_statement": "Understand compile_context and token reduction",
+      "trace_file": "fixtures/swe_bench/traces/core_compile.json",
+      "min_reduction_percent": 0.0
+    },
+    {
+      "instance_id": "tokenopt__transforms",
+      "repo": "TokenOptmization",
+      "problem_statement": "Inspect transform pipeline modules",
+      "trace_file": "fixtures/swe_bench/traces/transforms.json",
+      "min_reduction_percent": 5.0
+    },
+    {
+      "instance_id": "tokenopt__long-agent",
+      "repo": "TokenOptmization",
+      "problem_statement": "Simulated long agent with large tool outputs",
+      "trace_file": "fixtures/swe_bench/traces/long_agent.json",
+      "min_reduction_percent": 15.0
+    }
+  ]
+}

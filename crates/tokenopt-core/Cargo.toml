@@ -5,6 +5,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+readme = "../../README.md"
+keywords = ["llm", "agents", "context", "tokens", "compiler"]
+categories = ["development-tools"]
+repository = "https://github.com/sunil-goyal-1502/TokenOptmization"
+publish = true
 
 [dependencies]
 serde.workspace = true

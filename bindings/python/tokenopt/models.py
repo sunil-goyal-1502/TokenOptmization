@@ -32,6 +32,9 @@ class TransformToggles(BaseModel):
     summarization: bool = True
     external_compress: bool = True
     cache_packer: bool = True
+    llm_summarization: bool = False
+    bacm: bool = False
+    fold_policy: bool = False
 
 
 class CompileOptions(BaseModel):
@@ -55,6 +58,8 @@ class CompileOptions(BaseModel):
     routing_hints: bool = True
     turn_index: int = 0
     llm_oracle: dict[str, Any] = Field(default_factory=dict)
+    fold_policy_path: str | None = None
+    llm_summarize: dict[str, Any] = Field(default_factory=dict)
 
 
 class CompareReport(BaseModel):

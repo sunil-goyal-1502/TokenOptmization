@@ -6,6 +6,24 @@ export interface TranscriptMessage {
   tool_call_id?: string;
 }
 
+export interface TransformToggles {
+  referential_keep?: boolean;
+  error_compaction?: boolean;
+  consumed_result_mask?: boolean;
+  rolling_window?: boolean;
+  budget_trim?: boolean;
+  guideline_bank?: boolean;
+  fold_collapse?: boolean;
+  agent_omit?: boolean;
+  memory_prune?: boolean;
+  summarization?: boolean;
+  llm_summarization?: boolean;
+  bacm?: boolean;
+  fold_policy?: boolean;
+  external_compress?: boolean;
+  cache_packer?: boolean;
+}
+
 export interface CompileOptions {
   session_id?: string;
   token_budget?: number;
@@ -20,6 +38,29 @@ export interface CompileOptions {
     description: string;
     required_slots?: string[];
   }>;
+  transforms?: TransformToggles;
+  fold_records?: FoldRecord[];
+  guideline_bank_path?: string;
+  fold_policy_path?: string;
+  external_compress_url?: string;
+  auto_rehydrate_refs?: boolean;
+  routing_hints?: boolean;
+  turn_index?: number;
+}
+
+export interface RoutingHint {
+  tier: "fast" | "full";
+  reason: string;
+  estimated_complexity?: number;
+}
+
+export interface CompareReport {
+  baseline_tokens: number;
+  compiled_tokens: number;
+  tokens_saved: number;
+  reduction_percent: number;
+  compile_duration_ms: number;
+  sufficient: boolean;
 }
 
 export interface CompileStats {
@@ -38,6 +79,7 @@ export interface CompileResult {
   stats: CompileStats;
   sufficient: boolean;
   sufficiency_message?: string;
+  routing_hint?: RoutingHint;
 }
 
 export interface AnalyzeReport {

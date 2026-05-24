@@ -16,9 +16,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+native = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["tokenopt"]
+
+[tool.maturin]
+manifest-path = "../../crates/tokenopt-py/Cargo.toml"
+module-name = "tokenopt._native"
+python-source = "."
+features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

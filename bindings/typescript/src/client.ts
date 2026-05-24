@@ -1,5 +1,6 @@
 import type {
   AnalyzeReport,
+  CompareReport,
   CompileOptions,
   CompileResult,
   TranscriptMessage,
@@ -50,6 +51,58 @@ export class TokenOptClient {
       throw new Error(err.error ?? `compile failed: ${res.status}`);
     }
     return res.json() as Promise<CompileResult>;
+  }
+
+  async compare(
+    messages: TranscriptMessage[],
+    options: CompileOptions = {},
+  ): Promise<CompareReport> {
+    const res = await this.fetch("/v1/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, options }),
+    });
+    if (!res.ok) {
+      const err = (await res.json()) as { error?: string };
+      throw new Error(err.error ?? `compare failed: ${res.status}`);
+    }
+    return res.json() as Promise<CompareReport>;
+  }
+
+  async rehydrate(
+    messages: TranscriptMessage[],
+    options: Record<string, unknown> = {},
+  ): Promise<{ messages: TranscriptMessage[]; refs_expanded: number }> {
+    const res = await this.fetch("/v1/rehydrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, options }),
+    });
+    if (!res.ok) {
+      const err = (await res.json()) as { error?: string };
+      throw new Error(err.error ?? `rehydrate failed: ${res.status}`);
+    }
+    return res.json() as Promise<{ messages: TranscriptMessage[]; refs_expanded: number }>;
+  }
+
+  async foldCollapse(
+    messages: TranscriptMessage[],
+  ): Promise<{ messages: TranscriptMessage[]; fold_records: unknown[] }> {
+    const res = await this.fetch("/v1/fold/collapse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+    if (!res.ok) {
+      const err = (await res.json()) as { error?: string };
+      throw new Error(err.error ?? `fold collapse failed: ${res.status}`);
+    }
+    return res.json() as Promise<{ messages: TranscriptMessage[]; fold_records: unknown[] }>;
+  }
+
+  async metrics(): Promise<Record<string, unknown>> {
+    const res = await this.fetch("/v1/metrics", { method: "GET" });
+    return res.json() as Promise<Record<string, unknown>>;
   }
 
   async beforeModel(

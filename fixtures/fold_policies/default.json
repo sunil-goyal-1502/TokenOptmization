@@ -1,0 +1,19 @@
+{
+  "collapse_score_threshold": 0.45,
+  "branch_scores": {
+    "explore-ui": 0.9,
+    "explore-tests": 0.3
+  },
+  "rules": [
+    {
+      "when_block_contains": "compile_context",
+      "action": "inject_fold",
+      "priority": 7
+    },
+    {
+      "when_block_contains": "test failed",
+      "action": "inject_fold",
+      "priority": 9
+    }
+  ]
+}

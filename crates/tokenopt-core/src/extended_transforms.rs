@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use crate::error::Result;
 use crate::fold::FoldRecord;
 use crate::ir::{BlockKind, ContextBlock};
+use crate::llm::{llm_summarize_text, LlmConfig};
 use crate::store::ColdStore;
 use crate::transform::{Transform, TransformContext};
 
@@ -292,6 +293,74 @@ impl Transform for MemoryPruneTransform {
                 max_turn.saturating_sub(b.metadata.turn_index) <= keep_turns
             })
             .collect())
+    }
+}
+
+/// LLM summarization of old middle blocks (requires `llm-http` + API key).
+pub struct LlmSummarizeTransform {
+    config: LlmConfig,
+    keep_recent: usize,
+}
+
+impl LlmSummarizeTransform {
+    pub fn new(config: LlmConfig, keep_recent: usize) -> Self {
+        Self { config, keep_recent }
+    }
+}
+
+#[async_trait]
+impl Transform for LlmSummarizeTransform {
+    fn name(&self) -> &'static str {
+        "llm_summarize"
+    }
+
+    async fn apply(
+        &self,
+        blocks: Vec<ContextBlock>,
+        ctx: &TransformContext,
+        store: Arc<dyn ColdStore>,
+    ) -> Result<Vec<ContextBlock>> {
+        let tail = self.keep_recent.max(ctx.keep_recent_tool_results + 4);
+        if blocks.len() <= tail + 3 {
+            return Ok(blocks);
+        }
+        let prefix_end = blocks
+            .iter()
+            .position(|b| !matches!(b.kind, BlockKind::System | BlockKind::ToolSchema))
+            .unwrap_or(0);
+        let tail_start = blocks.len().saturating_sub(tail);
+        if tail_start <= prefix_end + 1 {
+            return Ok(blocks);
+        }
+
+        let middle: String = blocks[prefix_end..tail_start]
+            .iter()
+            .filter(|b| !b.metadata.pinned)
+            .map(|b| format!("{:?}: {}\n", b.kind, b.content.lines().next().unwrap_or("")))
+            .collect();
+
+        let summary = llm_summarize_text(&self.config, &middle, 2_000).await?;
+        let key = format!("llm-sum-{}", uuid::Uuid::new_v4());
+        let reference = store
+            .put(&ctx.session_id, &key, summary.as_bytes())
+            .await?;
+
+        let mut out = blocks[..prefix_end].to_vec();
+        out.push(ContextBlock {
+            id: format!("llm-sum-{}", uuid::Uuid::new_v4()),
+            kind: BlockKind::Summary,
+            content: format!(
+                "[llm_summarize] collapsed {} blocks\n{}\nref: {}",
+                tail_start - prefix_end,
+                summary,
+                reference.uri
+            ),
+            tool_call_id: None,
+            tool_name: None,
+            metadata: Default::default(),
+        });
+        out.extend(blocks[tail_start..].iter().cloned());
+        Ok(out)
     }
 }
 

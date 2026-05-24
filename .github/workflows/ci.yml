@@ -11,9 +11,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --workspace --release
-      - run: cargo test --workspace
+      - run: cargo build -p tokenopt-core -p tokenopt-cli -p tokenopt-server -p tokenopt-py --release
+      - run: cargo test -p tokenopt-core -p tokenopt-cli
+      - run: cargo test -p tokenopt-core --test swe_bench_harness
       - run: cargo run -p tokenopt-cli -- validate --trace fixtures/sample-trace.json
+
+  native-node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cargo build -p tokenopt-node --release
+      - run: npm install && npm run build
+        working-directory: bindings/node
+
+  native-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install maturin
+      - run: maturin build --release -o dist/
+        working-directory: bindings/python
 
   typescript:
     runs-on: ubuntu-latest

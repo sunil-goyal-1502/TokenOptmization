@@ -8,9 +8,11 @@
 //! - Run [`tokenopt-server`] and call from any language
 //! - Use Python/TypeScript clients over HTTP
 
+pub mod bacm;
 pub mod compare;
 pub mod compile;
 pub mod error;
+pub mod fold_policy;
 pub mod extended_transforms;
 pub mod fold;
 pub mod fold_runtime;
@@ -44,6 +46,7 @@ pub use rehydrate::{
 };
 pub use error::{CompilerError, Result};
 pub use fold::{FoldArtifact, FoldRecord, FoldStatus};
+pub use fold_policy::{FoldPolicy, FoldPolicyRule, FoldPolicyTransform};
 pub use ir::{
     blocks_to_messages, extract_referents, extract_text, parse_transcript, validate_blocks,
     BlockKind, BlockMetadata, ContextBlock, MessageContent, TranscriptMessage,

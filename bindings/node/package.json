@@ -1,0 +1,20 @@
+{
+  "name": "@tokenopt/native",
+  "version": "0.1.0",
+  "description": "Node.js native addon for TokenOpt (napi-rs)",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "tokenopt",
+    "targets": ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-pc-windows-msvc"]
+  },
+  "scripts": {
+    "build": "napi build --platform --release --cargo-cwd ../../crates/tokenopt-node",
+    "build:debug": "napi build --platform --cargo-cwd ../../crates/tokenopt-node"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0"
+  },
+  "files": ["index.js", "index.d.ts", "*.node"]
+}

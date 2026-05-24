@@ -4,6 +4,8 @@ members = [
     "crates/tokenopt-core",
     "crates/tokenopt-cli",
     "crates/tokenopt-server",
+    "crates/tokenopt-py",
+    "crates/tokenopt-node",
 ]
 default-members = ["crates/tokenopt-core", "crates/tokenopt-cli"]
 

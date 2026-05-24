@@ -1,53 +1,42 @@
-# Research backlog → implementation status
+# Research backlog — implementation status
 
-## Implemented in `tokenopt-core`
+All major research items now have code paths in this repository.
 
-| Research item | Module / transform | Enable |
-|---------------|-------------------|--------|
-| SGCC compile pipeline | `compile.rs`, `pipeline.rs` | always |
-| ACON guideline bank | `guideline.rs` → `guideline_pin` | `transforms.guideline_bank` |
-| Context folding | `fold.rs`, `fold_runtime.rs`, `fold_inject`, `fold_collapse` | `fold_records`, `role: fold` messages |
-| Rule summarization | `rule_summarize` | `transforms.summarization` (default on) |
-| Prompt-cache packer | `cache_packer` | `transforms.cache_packer` (default on) |
-| Agent-Omit | `agent_omit` | `transforms.agent_omit` (default on) |
-| MEM1-style prune | `memory_prune` | `transforms.memory_prune` |
-| LLMLingua-2 hook | `external_compress` + `examples/compress_sidecar.py` | `external_compress_url` |
-| Cascade routing hint | `routing.rs` | `routing_hints` on `CompileResult` |
-| LLM sufficiency oracle | `llm.rs` | `llm_oracle.enabled` + `--features llm-http` |
-| Smart rehydrate | `rehydrate.rs` | `auto_rehydrate_refs` |
-| Accurate tokens | `tokens.rs` | `--features accurate-tokens` |
+## Implemented
 
-## Still out of scope
+| Item | Location |
+|------|----------|
+| SGCC pipeline | `compile.rs`, `pipeline.rs` |
+| ACON guideline bank | `guideline.rs`, `fixtures/guidelines/` |
+| Context folding | `fold.rs`, `fold_runtime.rs`, `role: fold` |
+| Fold policy (JSON / GRPO scores export) | `fold_policy.rs`, `fixtures/fold_policies/` |
+| Rule + LLM summarization | `rule_summarize`, `llm_summarize` |
+| BACM critical memory | `bacm.rs` |
+| LLMLingua-2 hook | `external_compress` + `examples/compress_sidecar.py` |
+| Routing hints | `routing.rs` |
+| LLM sufficiency oracle | `llm.rs` + `llm-http` feature |
+| Auto rehydrate | `CompileOptions.auto_rehydrate_refs` |
+| Accurate tokens | `accurate-tokens` feature |
+| **Native Python (pyo3)** | `crates/tokenopt-py` → `tokenopt._native` |
+| **Native Node (napi-rs)** | `crates/tokenopt-node` → `@tokenopt/native` |
+| **SWE-bench-lite harness** | `fixtures/swe_bench/`, `tests/swe_bench_harness.rs` |
+| Publish metadata | `docs/PUBLISHING.md`, crate `publish = true` on core |
 
-- Trained folding policy (FoldGRPO / RL)
-- In-process pyo3 / napi (HTTP clients only)
-- crates.io / PyPI / npm publish
-- SWE-bench-scale automated quality CI
-- Full BACM paper reproduction (partial via `memory_prune` + `agent_omit`)
+## Operational limits
 
-## Example: enable research pipeline
+- **FoldGRPO training** — not in-repo; export scores to `fixtures/fold_policies/*.json`
+- **Full SWE-bench Docker eval** — use upstream SWE-bench; we validate **compiler reduction** on traces
+- **LLMLingua-2** — optional Python dep on sidecar; stub fallback without GPU
 
-```json
-{
-  "options": {
-    "session_id": "run-1",
-    "transforms": {
-      "guideline_bank": true,
-      "memory_prune": true
-    },
-    "guideline_bank_path": "fixtures/guidelines/default.json",
-    "fold_records": [{"subgoal": "setup", "status": "success"}],
-    "external_compress_url": "http://127.0.0.1:8790/compress",
-    "routing_hints": true,
-    "auto_rehydrate_refs": false
-  }
-}
-```
-
-Build with LLM oracle:
+## Quick commands
 
 ```bash
-cargo build -p tokenopt-core --features llm-http
-export OPENAI_API_KEY=sk-...
-# CompileOptions.llm_oracle = { "enabled": true }
+cargo test -p tokenopt-core --test swe_bench_harness
+./scripts/run_swe_bench.sh
+
+# Native Python
+pip install maturin && cd bindings/python && maturin develop --release
+
+# Native Node
+cd bindings/node && npm install && npm run build
 ```

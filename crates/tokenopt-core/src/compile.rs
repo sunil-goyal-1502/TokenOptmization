@@ -47,6 +47,12 @@ pub struct TransformToggles {
     pub external_compress: bool,
     #[serde(default = "default_true")]
     pub cache_packer: bool,
+    #[serde(default)]
+    pub llm_summarization: bool,
+    #[serde(default)]
+    pub bacm: bool,
+    #[serde(default)]
+    pub fold_policy: bool,
 }
 
 impl Default for TransformToggles {
@@ -64,6 +70,9 @@ impl Default for TransformToggles {
             summarization: true,
             external_compress: true,
             cache_packer: true,
+            llm_summarization: false,
+            bacm: false,
+            fold_policy: false,
         }
     }
 }
@@ -110,6 +119,11 @@ pub struct CompileOptions {
     pub routing_hints: bool,
     #[serde(default)]
     pub turn_index: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fold_policy_path: Option<String>,
+    /// Shared LLM config for oracle + optional `llm_summarize` transform.
+    #[serde(default)]
+    pub llm_summarize: LlmConfig,
 }
 
 fn default_keep_recent() -> usize {
@@ -151,6 +165,8 @@ impl Default for CompileOptions {
             auto_rehydrate_refs: false,
             routing_hints: true,
             turn_index: 0,
+            fold_policy_path: None,
+            llm_summarize: LlmConfig::default(),
         }
     }
 }
@@ -241,6 +257,16 @@ async fn compile_context_inner(
     let input_tokens = estimate_blocks_tokens(&blocks_in);
 
     let mut pipeline_options = options.clone();
+    if pipeline_options.transforms.fold_policy {
+        let policy = pipeline_options
+            .fold_policy_path
+            .as_ref()
+            .and_then(|p| crate::fold_policy::FoldPolicy::load_from_path(p).ok())
+            .unwrap_or_else(crate::fold_policy::FoldPolicy::default_builtin);
+        pipeline_options
+            .fold_records
+            .extend(policy.derive_fold_records(&blocks_in));
+    }
     if !pipeline_options.enable_consumed_masking {
         pipeline_options.transforms.consumed_result_mask = false;
     }

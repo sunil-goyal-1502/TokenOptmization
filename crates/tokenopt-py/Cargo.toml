@@ -1,0 +1,17 @@
+[package]
+name = "tokenopt-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Python extension module (pyo3) for TokenOpt"
+publish = false
+
+[lib]
+name = "tokenopt_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21", features = ["extension-module"] }
+serde_json.workspace = true
+tokio.workspace = true
+tokenopt-core = { path = "../tokenopt-core" }

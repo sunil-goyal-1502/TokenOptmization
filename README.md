@@ -74,6 +74,23 @@ with TokenOptClient() as client:
     print(out.stats.reduction_percent)
 ```
 
+### Native bindings (no HTTP)
+
+**Python (pyo3):**
+
+```bash
+pip install maturin
+cd bindings/python && maturin develop --release
+python -c "from tokenopt.native import compile_native, native_available; print(native_available())"
+```
+
+**Node.js (napi-rs):**
+
+```bash
+cd bindings/node && npm install && npm run build
+node -e "const n=require('@tokenopt/native'); console.log(n.nativeAvailable())"
+```
+
 ### TypeScript (Cursor hooks, LangChain.js, etc.)
 
 ```bash

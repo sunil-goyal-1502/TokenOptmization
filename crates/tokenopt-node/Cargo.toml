@@ -1,0 +1,19 @@
+[package]
+name = "tokenopt-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Node.js native addon (napi-rs) for TokenOpt"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "=2.16.17", default-features = false, features = ["napi4", "tokio_rt", "async"] }
+napi-derive = "=2.16.13"
+serde_json.workspace = true
+tokenopt-core = { path = "../tokenopt-core" }
+
+[build-dependencies]
+napi-build = "=2.1.3"

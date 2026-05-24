@@ -29,6 +29,79 @@ fn default_model() -> String {
     "gpt-4o-mini".into()
 }
 
+/// Summarize text via chat completion API (`llm-http` feature).
+pub async fn llm_summarize_text(config: &LlmConfig, text: &str, max_out_chars: usize) -> Result<String> {
+    if !config.enabled {
+        return Ok(truncate_chars(text, max_out_chars));
+    }
+    #[cfg(feature = "llm-http")]
+    {
+        let summary = llm_chat(config, &format!(
+            "Summarize the following agent transcript excerpt for future turns. \
+             Preserve file paths, errors, and decisions. Max {} chars.\n\n{}",
+            max_out_chars,
+            &text[..text.len().min(24_000)]
+        ))
+        .await?;
+        return Ok(truncate_chars(&summary, max_out_chars));
+    }
+    #[cfg(not(feature = "llm-http"))]
+    {
+        let _ = config;
+        Ok(truncate_chars(text, max_out_chars))
+    }
+}
+
+fn truncate_chars(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
+#[cfg(feature = "llm-http")]
+pub async fn llm_chat(config: &LlmConfig, user_prompt: &str) -> Result<String> {
+    let key_var = if config.api_key_env.is_empty() {
+        "OPENAI_API_KEY"
+    } else {
+        &config.api_key_env
+    };
+    let api_key = std::env::var(key_var)
+        .map_err(|_| CompilerError::Other(format!("missing env {key_var}")))?;
+    let url = format!("{}/chat/completions", config.api_base.trim_end_matches('/'));
+    let body = serde_json::json!({
+        "model": config.model,
+        "messages": [
+            {"role": "system", "content": "You compress agent context faithfully."},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.1,
+    });
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(&url)
+        .bearer_auth(api_key)
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(60))
+        .send()
+        .await
+        .map_err(|e| CompilerError::Other(format!("llm chat: {e}")))?;
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| CompilerError::Other(format!("llm chat body: {e}")))?;
+    parse_chat_content(&text).ok_or_else(|| CompilerError::Other("llm chat: empty response".into()))
+}
+
+#[cfg(feature = "llm-http")]
+fn parse_chat_content(response: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_str(response).ok()?;
+    v.get("choices")?
+        .as_array()?
+        .first()?
+        .get("message")?
+        .get("content")?
+        .as_str()
+        .map(String::from)
+}
+
 /// LLM sufficiency check (optional; requires `llm-http` + API key).
 pub struct LlmSufficiencyOracle {
     config: LlmConfig,

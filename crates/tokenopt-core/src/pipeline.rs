@@ -2,11 +2,13 @@
 
 use crate::compile::CompileOptions;
 use crate::guideline::GuidelineBank;
+use crate::fold_policy::FoldPolicy;
 use crate::transform::{
-    AgentOmitTransform, BudgetTrimTransform, CachePackTransform, ConsumedResultMaskTransform,
-    ErrorCompactionTransform, ExternalCompressTransform, FoldCollapseTransform,
-    FoldInjectTransform, GuidelinePinTransform, MemoryPruneTransform, ReferentialKeepTransform,
-    RollingWindowTransform, RuleSummarizeTransform, TransformPipeline, TransformPipelineBuilder,
+    AgentOmitTransform, BacmTransform, BudgetTrimTransform, CachePackTransform,
+    ConsumedResultMaskTransform, ErrorCompactionTransform, ExternalCompressTransform,
+    FoldCollapseTransform, FoldInjectTransform, FoldPolicyTransform, GuidelinePinTransform,
+    LlmSummarizeTransform, MemoryPruneTransform, ReferentialKeepTransform, RollingWindowTransform,
+    RuleSummarizeTransform, TransformPipeline, TransformPipelineBuilder,
 };
 
 pub fn build_pipeline(options: &CompileOptions) -> TransformPipeline {
@@ -23,6 +25,14 @@ pub fn build_pipeline(options: &CompileOptions) -> TransformPipeline {
             .and_then(|p| GuidelineBank::load_from_path(p).ok())
             .unwrap_or_else(GuidelineBank::default_builtin);
         builder = builder.then(GuidelinePinTransform::new(bank));
+    }
+    if t.fold_policy {
+        let policy = options
+            .fold_policy_path
+            .as_ref()
+            .and_then(|p| FoldPolicy::load_from_path(p).ok())
+            .unwrap_or_else(FoldPolicy::default_builtin);
+        builder = builder.then(FoldPolicyTransform::new(policy));
     }
     if !options.fold_records.is_empty() {
         builder = builder.then(FoldInjectTransform::new(options.fold_records.clone()));
@@ -42,10 +52,18 @@ pub fn build_pipeline(options: &CompileOptions) -> TransformPipeline {
     if t.memory_prune {
         builder = builder.then(MemoryPruneTransform);
     }
-    if t.summarization {
+    if t.llm_summarization && options.llm_summarize.enabled {
+        builder = builder.then(LlmSummarizeTransform::new(
+            options.llm_summarize.clone(),
+            options.summarize_keep_recent_blocks,
+        ));
+    } else if t.summarization {
         builder = builder.then(RuleSummarizeTransform::new(
             options.summarize_keep_recent_blocks,
         ));
+    }
+    if t.bacm {
+        builder = builder.then(BacmTransform);
     }
     if t.external_compress {
         builder = builder.then(ExternalCompressTransform::new(
