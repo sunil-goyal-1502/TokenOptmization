@@ -12,9 +12,10 @@ use axum::{
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use tokenopt_core::{
-    analyze_trace, collapse_branch_messages, compare_trace, compile_context, metrics_snapshot,
-    prometheus_text, rehydrate_messages, AgentMiddleware, CompareReport, CompileOptions,
-    CompileResult, FileColdStore, FoldRecord, OrchestratorAdapter, RehydrateOptions,
+    analyze_trace, collapse_branch_messages, compare_trace, compile_context, compile_multi_agent,
+    metrics_snapshot, prometheus_text, rehydrate_messages, AgentContext, AgentMiddleware,
+    CompareReport, CompileOptions, CompileResult, FileColdStore, FoldRecord,
+    MultiAgentCompileResult, MultiAgentOptions, OrchestratorAdapter, RehydrateOptions,
     TranscriptMessage,
 };
 use tower_http::cors::CorsLayer;
@@ -92,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/rehydrate", post(rehydrate))
         .route("/v1/compare", post(compare))
         .route("/v1/fold/collapse", post(fold_collapse))
+        .route("/v1/orchestrator/compile", post(orchestrator_compile))
         .route("/v1/metrics", get(metrics))
         .route("/v1/metrics/prometheus", get(metrics_prometheus))
         .layer(CorsLayer::permissive())
@@ -171,6 +173,27 @@ async fn fold_collapse(
         messages,
         fold_records,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+struct OrchestratorCompileRequest {
+    pub agents: Vec<AgentContext>,
+    #[serde(default)]
+    pub options: MultiAgentOptions,
+}
+
+/// Compile every agent's context under one shared global budget (MACO):
+/// cross-agent dedup, water-filling allocation, per-agent compilation.
+async fn orchestrator_compile(
+    State(state): State<AppState>,
+    Json(req): Json<OrchestratorCompileRequest>,
+) -> Result<Json<MultiAgentCompileResult>, AppError> {
+    let mut opts = req.options;
+    if opts.global_token_budget == 0 {
+        opts.global_token_budget = state.default_budget;
+    }
+    let result = compile_multi_agent(&req.agents, opts, state.store.clone()).await?;
+    Ok(Json(result))
 }
 
 async fn compare(

@@ -41,6 +41,12 @@ cargo run -p tokenopt-cli -- bench agent-loop --turns 25 --payload-bytes 12000
 
 You should see **30–70% reduction** on the final turn when old tool outputs are masked.
 
+**Multi-agent orchestrators (MACO):** global budget allocation + cross-agent dedup across a whole supervisor/worker tree — see [docs/MULTI_AGENT_RESEARCH.md](docs/MULTI_AGENT_RESEARCH.md).
+
+```bash
+cargo run -p tokenopt-cli -- bench orchestrator --workers 8 --rounds 12 --shared-fraction 0.75
+```
+
 ## Quick start
 
 ```bash
@@ -145,6 +151,7 @@ let result = compile_context(&messages, CompileOptions::default(), store, None).
 | `POST /v1/compare` | Baseline vs compiled on same trace |
 | `POST /v1/rehydrate` | Expand `ref://` cold-store payloads |
 | `POST /v1/fold/collapse` | Merge `role: fold` branch messages into `FoldRecord`s |
+| `POST /v1/orchestrator/compile` | Multi-agent compile: global budget + cross-agent dedup (MACO) |
 | `GET /v1/metrics` | Compile counters snapshot |
 
 ## Schemas

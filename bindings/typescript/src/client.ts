@@ -100,6 +100,32 @@ export class TokenOptClient {
     return res.json() as Promise<{ messages: TranscriptMessage[]; fold_records: unknown[] }>;
   }
 
+  /**
+   * Compile all agents' contexts under one shared global budget (MACO):
+   * cross-agent dedup + water-filling allocation. See docs/MULTI_AGENT_RESEARCH.md.
+   */
+  async orchestratorCompile(
+    agents: Array<{
+      agent_id: string;
+      role?: "supervisor" | "worker" | "critic" | "memory" | "other";
+      priority?: number;
+      feedback?: { sufficiency_failures?: number; rehydration_requests?: number };
+      messages: TranscriptMessage[];
+    }>,
+    options: Record<string, unknown> = {},
+  ): Promise<Record<string, unknown>> {
+    const res = await this.fetch("/v1/orchestrator/compile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agents, options }),
+    });
+    if (!res.ok) {
+      const err = (await res.json()) as { error?: string };
+      throw new Error(err.error ?? `orchestrator compile failed: ${res.status}`);
+    }
+    return res.json() as Promise<Record<string, unknown>>;
+  }
+
   async metrics(): Promise<Record<string, unknown>> {
     const res = await this.fetch("/v1/metrics", { method: "GET" });
     return res.json() as Promise<Record<string, unknown>>;

@@ -84,6 +84,24 @@ enum BenchCommands {
         #[arg(long)]
         json: bool,
     },
+    /// Simulate supervisor + workers; compare baseline / independent / MACO
+    Orchestrator {
+        #[arg(long, default_value = "4")]
+        workers: u32,
+        #[arg(long, default_value = "10")]
+        rounds: u32,
+        #[arg(long, default_value = "6000")]
+        payload_bytes: usize,
+        /// Fraction of worker reads per round hitting shared artifacts (0..1)
+        #[arg(long, default_value = "0.5")]
+        shared_fraction: f64,
+        #[arg(long, default_value = "64000")]
+        global_budget: u64,
+        #[arg(long, default_value = "2")]
+        keep_recent: usize,
+        #[arg(long)]
+        json: bool,
+    },
     /// Run synthetic agent loop; compiles context before each turn
     AgentLoop {
         #[arg(long, default_value = "20")]
@@ -171,6 +189,26 @@ async fn main() -> anyhow::Result<()> {
                 payload_bytes,
                 json,
             } => cmd_bench_latency(trace, iterations, sim_turns, payload_bytes, json).await,
+            BenchCommands::Orchestrator {
+                workers,
+                rounds,
+                payload_bytes,
+                shared_fraction,
+                global_budget,
+                keep_recent,
+                json,
+            } => {
+                cmd_bench_orchestrator(
+                    workers,
+                    rounds,
+                    payload_bytes,
+                    shared_fraction,
+                    global_budget,
+                    keep_recent,
+                    json,
+                )
+                .await
+            }
         },
     }
 }
@@ -416,6 +454,76 @@ async fn cmd_bench_agent_loop(
         "  cumulative saved: {} tokens (sum per-turn deltas)",
         report.total_tokens_saved_across_turns
     );
+    Ok(())
+}
+
+async fn cmd_bench_orchestrator(
+    workers: u32,
+    rounds: u32,
+    payload_bytes: usize,
+    shared_fraction: f64,
+    global_budget: u64,
+    keep_recent: usize,
+    json: bool,
+) -> anyhow::Result<()> {
+    let config = tokenopt_core::OrchestratorSimConfig {
+        workers,
+        rounds,
+        tool_payload_bytes: payload_bytes,
+        shared_read_fraction: shared_fraction.clamp(0.0, 1.0),
+        global_token_budget: global_budget,
+        keep_recent_tool_results: keep_recent,
+    };
+    let report = tokenopt_core::simulate_orchestrator_loop(config).await?;
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+        return Ok(());
+    }
+
+    eprintln!("MACO orchestrator benchmark (synthetic, no LLM)");
+    eprintln!(
+        "agents: 1 supervisor + {} workers | rounds: {} | shared reads: {:.0}% | global budget: {}",
+        workers,
+        rounds,
+        shared_fraction * 100.0,
+        global_budget
+    );
+    eprintln!();
+    eprintln!(
+        "{:>5} {:>12} {:>12} {:>12} {:>8} {:>14} {:>14}",
+        "round", "baseline", "independent", "maco", "dedup#", "vs-baseline", "vs-independent"
+    );
+    for r in &report.rounds {
+        eprintln!(
+            "{:>5} {:>12} {:>12} {:>12} {:>8} {:>13.1}% {:>13.1}%",
+            r.round,
+            r.baseline_tokens,
+            r.independent_tokens,
+            r.maco_tokens,
+            r.dedup_duplicates_masked,
+            r.maco_vs_baseline_percent,
+            r.maco_vs_independent_percent
+        );
+    }
+    eprintln!();
+    eprintln!("FINAL round {}:", report.rounds.len());
+    eprintln!("  baseline tokens:     {}", report.final_baseline_tokens);
+    eprintln!("  independent tokens:  {}", report.final_independent_tokens);
+    eprintln!("  maco tokens:         {}", report.final_maco_tokens);
+    eprintln!(
+        "  maco vs baseline:    {:.1}% saved",
+        report.final_maco_vs_baseline_percent
+    );
+    eprintln!(
+        "  maco vs independent: {:.1}% saved",
+        report.final_maco_vs_independent_percent
+    );
+    eprintln!();
+    eprintln!("CUMULATIVE (sum across rounds):");
+    eprintln!("  baseline:    {}", report.cumulative_baseline_tokens);
+    eprintln!("  independent: {}", report.cumulative_independent_tokens);
+    eprintln!("  maco:        {}", report.cumulative_maco_tokens);
     Ok(())
 }
 
