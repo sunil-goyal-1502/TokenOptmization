@@ -10,7 +10,7 @@ use crate::ir::{extract_text, MessageContent, TranscriptMessage};
 use crate::metrics::record_rehydrate;
 use crate::store::{ColdStore, StoreRef};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RehydrateOptions {
     /// Only expand these refs; if empty, expand all `ref://` found in messages.
     #[serde(default)]
@@ -18,6 +18,15 @@ pub struct RehydrateOptions {
     /// Cap bytes loaded per reference (default 64KB).
     #[serde(default = "default_max_bytes")]
     pub max_bytes_per_ref: usize,
+}
+
+impl Default for RehydrateOptions {
+    fn default() -> Self {
+        Self {
+            refs: vec![],
+            max_bytes_per_ref: default_max_bytes(),
+        }
+    }
 }
 
 fn default_max_bytes() -> usize {

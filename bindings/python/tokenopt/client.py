@@ -96,6 +96,23 @@ class TokenOptClient:
         r.raise_for_status()
         return r.json()
 
+    def orchestrator_compile(
+        self,
+        agents: list[dict[str, Any]],
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Compile all agents' contexts under one shared global budget (MACO).
+
+        Each agent dict: {"agent_id": str, "role": "supervisor|worker|critic|memory|other",
+        "priority": float, "feedback": {...}, "messages": [...]}.
+        Options: {"global_token_budget": int, "allocation": "water_filling|uniform",
+        "cross_agent_dedup": bool, "base": CompileOptions-shaped dict, ...}.
+        """
+        payload = {"agents": agents, "options": options or {}}
+        r = self._client.post("/v1/orchestrator/compile", json=payload)
+        r.raise_for_status()
+        return r.json()
+
     def before_model(
         self,
         messages: list[TranscriptMessage | dict[str, Any]],

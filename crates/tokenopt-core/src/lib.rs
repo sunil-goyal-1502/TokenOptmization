@@ -24,6 +24,8 @@ pub mod routing;
 pub mod metrics;
 pub mod middleware;
 pub mod oracle;
+pub mod orchestrator;
+pub mod orchestrator_sim;
 pub mod path_util;
 pub mod rehydrate;
 pub mod simulate;
@@ -58,6 +60,16 @@ pub use middleware::{
 pub use oracle::{
     infer_subgoals_from_blocks, CompositeOracle, RuleOracle, Subgoal, SufficiencyOracle,
     SufficiencyResult,
+};
+pub use orchestrator::{
+    allocate_budgets, compile_multi_agent, compress_handoff_for_consumer, effective_weight,
+    AgentCompileReport, AgentContext, AgentFeedback, AgentRole, AllocationStrategy,
+    BudgetAllocation, BudgetLedger, DedupReport, HandoffCompression, MultiAgentCompileResult,
+    MultiAgentOptions,
+};
+pub use orchestrator_sim::{
+    generate_orchestrator_scenario, simulate_orchestrator_loop, OrchestratorRoundMetrics,
+    OrchestratorSimConfig, OrchestratorSimReport,
 };
 pub use store::{ColdStore, FileColdStore, MemoryColdStore, StoreRef};
 pub use tokens::{

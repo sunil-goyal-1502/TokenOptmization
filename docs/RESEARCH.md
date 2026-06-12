@@ -21,6 +21,7 @@ All major research items now have code paths in this repository.
 | **Native Node (napi-rs)** | `crates/tokenopt-node` → `@tokenopt/native` |
 | **SWE-bench-lite harness** | `fixtures/swe_bench/`, `tests/swe_bench_harness.rs` |
 | Publish metadata | `docs/PUBLISHING.md`, crate `publish = true` on core |
+| **MACO multi-agent orchestration** | `orchestrator.rs`, `orchestrator_sim.rs`, [`docs/MULTI_AGENT_RESEARCH.md`](MULTI_AGENT_RESEARCH.md) |
 
 ## Operational limits
 
